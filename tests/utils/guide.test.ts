@@ -219,6 +219,18 @@ describe("sortGuideList", () => {
     const rows = [row(100), row(300)]
     expect(sortGuideList(rows, { prop: "hack", order: "descending" }).map(r => r.profitPH)).toEqual([300, 100])
   })
+
+  it("vol 为 -1 的行按成交量排序时恒排最后", () => {
+    const rows = [
+      { hrid: "/items/a", level: 0, name: "A", item: {} as any, ask: 1, bid: 1, vol: 50, profitPP: 1, profitRate: 0.1, profitPH: 100, profitPD: 2400, hasManualPrice: false, favorite: false },
+      { hrid: "/items/b", level: 0, name: "B", item: {} as any, ask: 1, bid: 1, vol: -1, profitPP: 1, profitRate: 0.1, profitPH: 100, profitPD: 2400, hasManualPrice: false, favorite: false },
+      { hrid: "/items/c", level: 0, name: "C", item: {} as any, ask: 1, bid: 1, vol: 10, profitPP: 1, profitRate: 0.1, profitPH: 100, profitPD: 2400, hasManualPrice: false, favorite: false }
+    ]
+    const asc = sortGuideList(rows, { prop: "vol", order: "ascending" })
+    expect(asc.map(r => r.hrid)).toEqual(["/items/c", "/items/a", "/items/b"])
+    const desc = sortGuideList(rows, { prop: "vol", order: "descending" })
+    expect(desc.map(r => r.hrid)).toEqual(["/items/a", "/items/c", "/items/b"])
+  })
 })
 
 describe("guidePage", () => {

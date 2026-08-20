@@ -120,8 +120,9 @@ const SORTABLE_PROPS = ["profitPD", "profitPH", "profitRate", "profitPP", "vol"]
 function compareGuide(a: GuideItem, b: GuideItem, prop: string, order: string): number {
   const va = (a as any)[prop]
   const vb = (b as any)[prop]
-  const aNull = va === null || va === undefined
-  const bNull = vb === null || vb === undefined
+  const invalid = (v: any) => v === null || v === undefined || (prop === "vol" && v < 0)
+  const aNull = invalid(va)
+  const bNull = invalid(vb)
   if (aNull && bNull) return 0
   if (aNull) return 1
   if (bNull) return -1
