@@ -25,4 +25,17 @@ describe("guide-favorite store", () => {
     store.addFavorite({ hrid: "/items/apple", level: 0 })
     expect(JSON.parse(localStorage.getItem("guide-favorite-list")!)).toEqual([{ hrid: "/items/apple", level: 0 }])
   })
+
+  it("从 localStorage 还原收藏列表", () => {
+    localStorage.setItem("guide-favorite-list", JSON.stringify([{ hrid: "/items/apple", level: 5 }]))
+    const store = useGuideFavoriteStore()
+    expect(store.list).toEqual([{ hrid: "/items/apple", level: 5 }])
+    expect(store.hasFavorite({ hrid: "/items/apple", level: 5 })).toBe(true)
+  })
+
+  it("localStorage 数据非数组时安全降级为空列表", () => {
+    localStorage.setItem("guide-favorite-list", "{\"a\":1}")
+    const store = useGuideFavoriteStore()
+    expect(store.list).toEqual([])
+  })
 })

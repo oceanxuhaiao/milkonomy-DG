@@ -39,7 +39,8 @@ const LIST_KEY = "guide-favorite-list"
 
 function load(): GuideFavoriteItem[] {
   try {
-    return JSON.parse(localStorage.getItem(LIST_KEY) || "[]")
+    const value = JSON.parse(localStorage.getItem(LIST_KEY) || "[]")
+    return Array.isArray(value) ? value : []
   } catch {
     return []
   }
