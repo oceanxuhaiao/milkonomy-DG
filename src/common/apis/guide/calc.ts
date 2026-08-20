@@ -114,3 +114,35 @@ export function filterGuideList(list: GuideItem[], params: GuideRequestData): Gu
   }
   return result
 }
+
+const SORTABLE_PROPS = ["profitPD", "profitPH", "profitRate", "profitPP", "vol"]
+
+function compareGuide(a: GuideItem, b: GuideItem, prop: string, order: string): number {
+  const va = (a as any)[prop]
+  const vb = (b as any)[prop]
+  const aNull = va === null || va === undefined
+  const bNull = vb === null || vb === undefined
+  if (aNull && bNull) return 0
+  if (aNull) return 1
+  if (bNull) return -1
+  const diff = order === "descending" ? vb - va : va - vb
+  if (diff !== 0) return diff
+  // 同值兜底：利润/h 降序（null 视为 -Infinity 排最后）
+  const pa = a.profitPH ?? -Infinity
+  const pb = b.profitPH ?? -Infinity
+  return pb - pa
+}
+
+/** 排序；无 sort 或 prop 非法时默认按利润/h 降序 */
+export function sortGuideList(list: GuideItem[], sort?: { prop: string, order: string }): GuideItem[] {
+  const sorted = [...list]
+  const prop = sort?.prop && SORTABLE_PROPS.includes(sort.prop) ? sort.prop : "profitPH"
+  const order = sort?.order === "ascending" ? "ascending" : "descending"
+  sorted.sort((a, b) => compareGuide(a, b, prop, order))
+  return sorted
+}
+
+export function guidePage(list: GuideItem[], params: GuideRequestData) {
+  const start = (params.currentPage - 1) * params.size
+  return { list: list.slice(start, start + params.size), total: list.length }
+}

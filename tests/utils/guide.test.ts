@@ -1,4 +1,4 @@
-import { buildGuideRows, calcGuideItem, filterGuideList, isEquipmentItem, resolveGuidePrice } from "@@/apis/guide/calc"
+import { buildGuideRows, calcGuideItem, filterGuideList, guidePage, isEquipmentItem, resolveGuidePrice, sortGuideList } from "@@/apis/guide/calc"
 import { describe, expect, it } from "vitest"
 
 describe("calcGuideItem", () => {
@@ -166,5 +166,62 @@ describe("filterGuideList", () => {
     const ringRow = baseRow({ item: { ...baseRow().item, equipmentDetail: { type: "/equipment_types/ring" } } })
     const r = filterGuideList([baseRow(), charmRow, ringRow], { currentPage: 1, size: 10, banCharm: true })
     expect(r.length).toBe(2)
+  })
+})
+
+describe("sortGuideList", () => {
+  const row = (profitPH: number | null, profitRate: number | null = 0.1): any => ({
+    hrid: "/items/x",
+    level: 0,
+    name: "X",
+    item: {} as any,
+    ask: 1,
+    bid: 1,
+    vol: 1,
+    profitPP: 1,
+    profitRate,
+    profitPH,
+    profitPD: profitPH === null ? null : profitPH * 24,
+    hasManualPrice: false,
+    favorite: false
+  })
+
+  it("默认按利润/h降序", () => {
+    const rows = [row(100), row(300), row(200)]
+    expect(sortGuideList(rows).map(r => r.profitPH)).toEqual([300, 200, 100])
+  })
+
+  it("升序", () => {
+    const rows = [row(300), row(100)]
+    expect(sortGuideList(rows, { prop: "profitPH", order: "ascending" }).map(r => r.profitPH)).toEqual([100, 300])
+  })
+
+  it("利润率列排序", () => {
+    const rows = [row(100, 0.05), row(100, 0.3), row(100, 0.1)]
+    expect(sortGuideList(rows, { prop: "profitRate", order: "descending" }).map(r => r.profitRate)).toEqual([0.3, 0.1, 0.05])
+  })
+
+  it("null 恒排最后（无论升降序）", () => {
+    const rows = [row(null), row(300), row(null), row(100)]
+    const desc = sortGuideList(rows, { prop: "profitPH", order: "descending" })
+    expect(desc.map(r => r.profitPH)).toEqual([300, 100, null, null])
+    const asc = sortGuideList(rows, { prop: "profitPH", order: "ascending" })
+    expect(asc.map(r => r.profitPH)).toEqual([100, 300, null, null])
+  })
+
+  it("非法 prop 回退为利润/h降序", () => {
+    const rows = [row(100), row(300)]
+    expect(sortGuideList(rows, { prop: "hack", order: "descending" }).map(r => r.profitPH)).toEqual([300, 100])
+  })
+})
+
+describe("guidePage", () => {
+  const rows = Array.from({ length: 25 }, (_, i) => ({ hrid: `/items/${i}` })) as any[]
+
+  it("按 currentPage/size 切片并返回 total", () => {
+    const r = guidePage(rows, { currentPage: 2, size: 10 })
+    expect(r.total).toBe(25)
+    expect(r.list.length).toBe(10)
+    expect(r.list[0].hrid).toBe("/items/10")
   })
 })
