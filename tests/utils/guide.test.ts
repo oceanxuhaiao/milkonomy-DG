@@ -1,4 +1,4 @@
-import { buildGuideRows, calcGuideItem, isEquipmentItem, resolveGuidePrice } from "@@/apis/guide/calc"
+import { buildGuideRows, calcGuideItem, filterGuideList, isEquipmentItem, resolveGuidePrice } from "@@/apis/guide/calc"
 import { describe, expect, it } from "vitest"
 
 describe("calcGuideItem", () => {
@@ -63,6 +63,13 @@ describe("resolveGuidePrice", () => {
     expect(r.ask).toBe(100)
     expect(r.hasManualPrice).toBe(false)
   })
+
+  it("手动卖价优先于市场价", () => {
+    const r = resolveGuidePrice({ bid: { manual: true, manualPrice: 95 } }, market)
+    expect(r.bid).toBe(95)
+    expect(r.ask).toBe(100)
+    expect(r.hasManualPrice).toBe(true)
+  })
 })
 
 describe("isEquipmentItem", () => {
@@ -105,5 +112,57 @@ describe("buildGuideRows", () => {
   it("favorite 初始为 false", () => {
     const rows = buildGuideRows([plainItem], priceGetter, manualGetter, 0.95)
     expect(rows[0].favorite).toBe(false)
+  })
+})
+
+describe("filterGuideList", () => {
+  const baseRow = (over: Partial<any> = {}): any => ({
+    hrid: "/items/apple",
+    level: 0,
+    name: "Apple",
+    item: { hrid: "/items/apple", name: "Apple", categoryHrid: "/item_categories/food", itemLevel: 10, equipmentDetail: undefined },
+    ask: 100,
+    bid: 120,
+    vol: 50,
+    profitPP: 14,
+    profitRate: 0.14,
+    profitPH: 700,
+    profitPD: 16800,
+    hasManualPrice: false,
+    favorite: false,
+    ...over
+  })
+
+  it("名称搜索（不区分大小写）", () => {
+    const rows = [baseRow(), baseRow({ name: "Milk" })]
+    expect(filterGuideList(rows, { currentPage: 1, size: 10, name: "app" }).map(r => r.name)).toEqual(["Apple"])
+  })
+
+  it("利润率下限：null 不通过", () => {
+    const rows = [baseRow({ profitRate: 0.05 }), baseRow({ profitRate: 0.2 }), baseRow({ profitRate: null })]
+    expect(filterGuideList(rows, { currentPage: 1, size: 10, profitRate: 10 }).map(r => r.profitRate)).toEqual([0.2])
+  })
+
+  it("物品等级上限", () => {
+    const rows = [baseRow(), baseRow({ item: { ...baseRow().item, itemLevel: 100 } })]
+    expect(filterGuideList(rows, { currentPage: 1, size: 10, maxItemLevel: 50 }).length).toBe(1)
+  })
+
+  it("成交量区间：vol<0 不通过", () => {
+    const rows = [baseRow({ vol: 10 }), baseRow({ vol: 100 }), baseRow({ vol: -1 })]
+    const r = filterGuideList(rows, { currentPage: 1, size: 10, minVolume1h: 20, maxVolume1h: 80 })
+    expect(r.map(x => x.vol)).toEqual([])
+  })
+
+  it("排除装备", () => {
+    const equipRow = baseRow({ item: { ...baseRow().item, categoryHrid: "/item_categories/equipment" } })
+    expect(filterGuideList([baseRow(), equipRow], { currentPage: 1, size: 10, banEquipment: true }).length).toBe(1)
+  })
+
+  it("排除护符", () => {
+    const charmRow = baseRow({ item: { ...baseRow().item, equipmentDetail: { type: "/equipment_types/charm" } } })
+    const ringRow = baseRow({ item: { ...baseRow().item, equipmentDetail: { type: "/equipment_types/ring" } } })
+    const r = filterGuideList([baseRow(), charmRow, ringRow], { currentPage: 1, size: 10, banCharm: true })
+    expect(r.length).toBe(2)
   })
 })

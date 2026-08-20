@@ -1,5 +1,6 @@
-import type { GuideItem } from "./type"
+import type { GuideItem, GuideRequestData } from "./type"
 import { getTrans } from "@/locales"
+import { getEquipmentTypeOf } from "../../utils/game"
 
 /** 装备类物品额外展示的强化等级 */
 export const GUIDE_ENHANCE_LEVELS = [5, 7, 8, 10, 12, 13, 14, 15]
@@ -78,4 +79,38 @@ export function buildGuideRows(
     }
   }
   return rows
+}
+
+export function filterGuideList(list: GuideItem[], params: GuideRequestData): GuideItem[] {
+  let result = list
+  if (params.name) {
+    const regex = new RegExp(params.name, "i")
+    result = result.filter(row => row.name.match(regex))
+  }
+  if (params.profitRate) {
+    result = result.filter(row => row.profitRate !== null && row.profitRate >= params.profitRate! / 100)
+  }
+  const hasMaxItemLevel = params.maxItemLevel !== undefined && params.maxItemLevel !== null
+  if (hasMaxItemLevel) {
+    const maxItemLevel = Number(params.maxItemLevel)
+    result = result.filter(row => typeof row.item?.itemLevel === "number" && row.item.itemLevel <= maxItemLevel)
+  }
+  const hasMinVol = params.minVolume1h !== undefined && params.minVolume1h !== null
+  const hasMaxVol = params.maxVolume1h !== undefined && params.maxVolume1h !== null
+  if (hasMinVol || hasMaxVol) {
+    const minVol = hasMinVol ? Number(params.minVolume1h) : undefined
+    const maxVol = hasMaxVol ? Number(params.maxVolume1h) : undefined
+    result = result.filter((row) => {
+      const vol = row.vol
+      if (typeof vol !== "number" || vol < 0) return false
+      return (minVol === undefined || vol >= minVol) && (maxVol === undefined || vol <= maxVol)
+    })
+  }
+  if (params.banEquipment) {
+    result = result.filter(row => !isEquipmentItem(row.item))
+  }
+  if (params.banCharm) {
+    result = result.filter(row => !row.item || getEquipmentTypeOf(row.item) !== "charm")
+  }
+  return result
 }
