@@ -1,4 +1,5 @@
 import type { GuideRequestData } from "./type"
+import { NO_TAX_FACTOR, SELL_TAX_FACTOR } from "@/common/constants/market"
 import { PriceStatus, useGameStoreOutside } from "@/pinia/stores/game"
 import { useGuideFavoriteStoreOutside } from "@/pinia/stores/guide-favorite"
 import { getGameDataApi, getPriceOf } from "../game"
@@ -12,15 +13,17 @@ export function getGuideDataApi(params: GuideRequestData) {
   const gameData = getGameDataApi()
   if (!marketData || !gameData) return { list: [], total: 0 }
 
-  const taxFactor = params.includeTax === false ? 1 : 0.95
+  const taxFactor = params.includeTax === false ? NO_TAX_FACTOR : SELL_TAX_FACTOR
   const items = Object.values(gameData.itemDetailMap)
 
   let list = buildGuideRows(
     items,
     (hrid, level) => {
       const price = getPriceOf(hrid, level, PriceStatus.ASK, PriceStatus.BID)
+      // 市场数据可能缺 vol，-1 表示无成交量（calc 层按无效处理）
       return { ask: price.ask, bid: price.bid, vol: price.vol ?? -1 }
     },
+    // 归一化为契约要求的 GuideManualPrice | null
     (hrid, level) => getManualPriceOf(hrid, level) ?? null,
     taxFactor
   )
