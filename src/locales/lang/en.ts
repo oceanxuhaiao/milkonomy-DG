@@ -119,6 +119,8 @@ export default {
   "材料右价+": "Materials Bid+",
   "忽略税率": "Ignore Tax",
   "计算税率": "Include Tax",
+
+  "导购工具": "Guide Tool",
   "工时费/h": "Hourly Rate",
   "工时费": "Hourly Rate",
   "溢价率%": "% Rate",

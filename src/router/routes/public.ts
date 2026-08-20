@@ -57,6 +57,23 @@ export const publicRoutes: RouteRecordRaw[] = [
   {
     path: "/",
     component: Layouts,
+    redirect: "/guide",
+    children: [
+      {
+        path: "guide",
+        component: () => import("@/pages/guide/index.vue"),
+        name: "Guide",
+        meta: {
+          title: t("导购工具"),
+          svgIcon: "dashboard",
+          affix: false
+        }
+      }
+    ]
+  },
+  {
+    path: "/",
+    component: Layouts,
     redirect: "/enhancer",
     children: [
       {
