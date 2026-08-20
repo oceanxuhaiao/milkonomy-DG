@@ -188,6 +188,9 @@ export function getPriceOf(hrid: string, level: number = 0, buyStatus: PriceStat
     return _priceCache[cacheKey]
   }
   if (isLoot(hrid) && hrid !== "/items/bag_of_10_cowbells") {
+    // 先写入"计算中"哨兵：部分战利品掉落表自引用（如 purples_gift 可开出自身），
+    // 若先算后缓存会导致 getLootPrice 无限递归（RangeError: Maximum call stack size exceeded）
+    _priceCache[cacheKey] = { ask: 0, bid: 0 }
     _priceCache[cacheKey] = getLootPrice(hrid)
     return _priceCache[cacheKey]
   }

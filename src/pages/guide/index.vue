@@ -220,7 +220,7 @@ function formatVolume1h(row: GuideItem) {
               {{ row.name }}<span v-if="row.level"> +{{ row.level }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="profitPD" :label="t('利润 / 天')" align="center" min-width="120" sortable="custom">
+          <el-table-column prop="profitPD" :label="t('利润 / 天')" align="center" min-width="120" sortable="custom" :sort-orders="['descending', 'ascending']">
             <template #default="{ row }">
               <span :class="row.hasManualPrice ? 'manual' : ''">
                 {{ fmt(row.profitPD) }}&nbsp;
@@ -230,22 +230,22 @@ function formatVolume1h(row: GuideItem) {
               </el-link>
             </template>
           </el-table-column>
-          <el-table-column prop="profitPH" :label="t('利润 / h')" align="center" min-width="120" sortable="custom">
+          <el-table-column prop="profitPH" :label="t('利润 / h')" align="center" min-width="120" sortable="custom" :sort-orders="['descending', 'ascending']">
             <template #default="{ row }">
               {{ fmt(row.profitPH) }}
             </template>
           </el-table-column>
-          <el-table-column prop="profitRate" :label="t('利润率')" min-width="120" align="center" sortable="custom">
+          <el-table-column prop="profitRate" :label="t('利润率')" min-width="120" align="center" sortable="custom" :sort-orders="['descending', 'ascending']">
             <template #default="{ row }">
               {{ row.profitRate !== null ? Format.percent(row.profitRate) : "-" }}
             </template>
           </el-table-column>
-          <el-table-column prop="profitPP" :label="t('利润 / 次')" align="center" min-width="120" sortable="custom">
+          <el-table-column prop="profitPP" :label="t('利润 / 次')" align="center" min-width="120" sortable="custom" :sort-orders="['descending', 'ascending']">
             <template #default="{ row }">
               <span :class="row.hasManualPrice ? 'manual' : ''">{{ fmt(row.profitPP) }}&nbsp;</span>
             </template>
           </el-table-column>
-          <el-table-column prop="vol" :label="t('成交量(1h)')" align="center" min-width="120" sortable="custom">
+          <el-table-column prop="vol" :label="t('成交量(1h)')" align="center" min-width="120" sortable="custom" :sort-orders="['descending', 'ascending']">
             <template #default="{ row }">
               {{ formatVolume1h(row) }}
             </template>
