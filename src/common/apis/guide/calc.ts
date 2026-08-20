@@ -6,15 +6,15 @@ import { getEquipmentTypeOf } from "../../utils/game"
 export const GUIDE_ENHANCE_LEVELS = [5, 7, 8, 10, 12, 13, 14, 15]
 
 /**
- * 四项利润指标。
+ * 四项利润指标（挂单倒卖口径：买价 = 市场 bid 侧挂单买入价，卖价 = 市场 ask 侧挂单卖出价）。
  * 买价/卖价无效（<=0）时四项全为 null；
  * 成交量无效（<0）时仅 利润/h、利润/天 为 null。
  */
-export function calcGuideItem(ask: number, bid: number, vol: number, taxFactor: number) {
-  const validPrice = ask > 0 && bid > 0
+export function calcGuideItem(buyPrice: number, sellPrice: number, vol: number, taxFactor: number) {
+  const validPrice = buyPrice > 0 && sellPrice > 0
   const validVol = typeof vol === "number" && vol >= 0
-  const profitPP = validPrice ? bid * taxFactor - ask : null
-  const profitRate = profitPP !== null ? profitPP / ask : null
+  const profitPP = validPrice ? sellPrice * taxFactor - buyPrice : null
+  const profitRate = profitPP !== null ? profitPP / buyPrice : null
   const profitPH = profitPP !== null && validVol ? profitPP * vol : null
   const profitPD = profitPH !== null ? profitPH * 24 : null
   return { profitPP, profitRate, profitPH, profitPD }
@@ -35,13 +35,16 @@ export interface GuideManualPrice {
   bid?: { manual: boolean, manualPrice?: number }
 }
 
-/** 手动价优先，否则市场价；vol 恒取市场值 */
+/**
+ * 挂单倒卖口径的价格解析：买价取市场 bid 侧（挂单买入），卖价取市场 ask 侧（挂单卖出）。
+ * 手动价优先，否则市场价；vol 恒取市场值。
+ */
 export function resolveGuidePrice(manual: GuideManualPrice | null | undefined, market: GuideMarketPrice) {
-  const ask = manual?.ask?.manual ? manual.ask.manualPrice! : market.ask
-  const bid = manual?.bid?.manual ? manual.bid.manualPrice! : market.bid
+  const buyPrice = manual?.bid?.manual ? manual.bid.manualPrice! : market.bid
+  const sellPrice = manual?.ask?.manual ? manual.ask.manualPrice! : market.ask
   return {
-    ask,
-    bid,
+    buyPrice,
+    sellPrice,
     vol: market.vol,
     hasManualPrice: !!manual?.ask?.manual || !!manual?.bid?.manual
   }
@@ -66,7 +69,7 @@ export function buildGuideRows(
     const levels = isEquipmentItem(item) ? [0, ...GUIDE_ENHANCE_LEVELS] : [0]
     for (const level of levels) {
       const price = resolveGuidePrice(manualGetter(item.hrid, level), priceGetter(item.hrid, level))
-      const profit = calcGuideItem(price.ask, price.bid, price.vol, taxFactor)
+      const profit = calcGuideItem(price.buyPrice, price.sellPrice, price.vol, taxFactor)
       rows.push({
         hrid: item.hrid,
         level,

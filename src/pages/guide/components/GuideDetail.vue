@@ -31,10 +31,10 @@ function fmt(value: number | null | undefined) {
       </div>
       <el-descriptions :column="2" border>
         <el-descriptions-item :label="t('买价')">
-          {{ data.ask > 0 ? Format.price(data.ask) : "-" }}
+          {{ data.buyPrice > 0 ? Format.price(data.buyPrice) : "-" }}
         </el-descriptions-item>
         <el-descriptions-item :label="t('卖价')">
-          {{ data.bid > 0 ? Format.price(data.bid) : "-" }}
+          {{ data.sellPrice > 0 ? Format.price(data.sellPrice) : "-" }}
         </el-descriptions-item>
         <el-descriptions-item :label="t('成交量(1h)')">
           {{ data.vol >= 0 ? Format.number(data.vol) : "-" }}

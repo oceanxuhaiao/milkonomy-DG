@@ -35,21 +35,22 @@ watch(() => props.data, (row) => {
   if (!row) return
   const market = getPriceOf(row.hrid, row.level, PriceStatus.ASK, PriceStatus.BID)
   const manual = getManualPriceOf(row.hrid, row.level)
+  // 挂单倒卖口径：买价 = 市场 bid 侧（挂单买入），卖价 = 市场 ask 侧（挂单卖出）
   rows.value = [
-    { type: "ask", label: t("买价"), market: market.ask, manual: manual?.ask?.manual || false, manualPrice: manual?.ask?.manualPrice },
-    { type: "bid", label: t("卖价"), market: market.bid, manual: manual?.bid?.manual || false, manualPrice: manual?.bid?.manualPrice }
+    { type: "bid", label: t("买价"), market: market.bid, manual: manual?.bid?.manual || false, manualPrice: manual?.bid?.manualPrice },
+    { type: "ask", label: t("卖价"), market: market.ask, manual: manual?.ask?.manual || false, manualPrice: manual?.ask?.manualPrice }
   ]
 }, { immediate: true })
 
 function onConfirm() {
   const row = props.data!
-  const ask = rows.value.find(r => r.type === "ask")!
-  const bid = rows.value.find(r => r.type === "bid")!
+  const sell = rows.value.find(r => r.type === "ask")!
+  const buy = rows.value.find(r => r.type === "bid")!
   usePriceStore().setPrice({
     hrid: row.hrid,
     level: row.level,
-    ask: { manual: ask.manual, manualPrice: ask.manualPrice },
-    bid: { manual: bid.manual, manualPrice: bid.manualPrice }
+    ask: { manual: sell.manual, manualPrice: sell.manualPrice },
+    bid: { manual: buy.manual, manualPrice: buy.manualPrice }
   })
   usePriceStore().commit()
   visible.value = false

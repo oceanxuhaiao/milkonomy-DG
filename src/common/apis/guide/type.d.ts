@@ -5,8 +5,10 @@ export interface GuideItem {
   level: number
   name: string
   item: ItemDetail
-  ask: number
-  bid: number
+  /** 买价：挂单买入价（市场 bid 侧，手动价优先） */
+  buyPrice: number
+  /** 卖价：挂单卖出价（市场 ask 侧，手动价优先） */
+  sellPrice: number
   vol: number
   profitPP: number | null
   profitRate: number | null

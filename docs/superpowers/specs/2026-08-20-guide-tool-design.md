@@ -65,19 +65,23 @@ export interface GuideItem {
 
 ### 3.4 价格口径（关键）
 
-- 买价 = 该物品 ask；卖价 = 该物品 bid
-- **手动价优先**：`getManualPriceOf(hrid, level)` 存在且 manual 时使用手动值（与全站一致）
+**2026-08-20 变更：改为挂单倒卖口径**（原"立即成交口径"在正常市场下必然全负——bid 恒低于 ask，扣税后无正利润；经用户确认切换为挂单倒卖策略）：
+
+- 买价 = 市场 **bid 侧**（挂单买入价）；卖价 = 市场 **ask 侧**（挂单卖出价）
+- **手动价优先**：`getManualPriceOf(hrid, level)` 存在且 manual 时使用手动值（与全站一致；手动价按市场侧存储：买价对应 bid 侧、卖价对应 ask 侧）
 - 市场价必须**显式固定** `PriceStatus.ASK` / `PriceStatus.BID` 调用 `getPriceOf(hrid, level, PriceStatus.ASK, PriceStatus.BID)`。不能使用 `getUsedPriceOf`（内部调 `getPriceOf` 未传状态参数，会跟随全局 buyStatus/sellStatus，被首页选择器影响）
 
 ### 3.5 计算公式
 
 ```
 taxFactor = includeTax ? 0.95 : 1        // 计算税率开关
-利润/次   = bid × taxFactor - ask
-利润率    = 利润/次 ÷ ask
+利润/次   = 卖价 × taxFactor - 买价       // 卖价 = ask（挂单卖出），买价 = bid（挂单买入）
+利润率    = 利润/次 ÷ 买价
 利润/h    = 利润/次 × vol
 利润/天   = 利润/h × 24
 ```
+
+（GuideItem 中字段名为 `buyPrice`/`sellPrice`，避免与市场 ask/bid 侧混淆。）
 
 ### 3.6 无效数据处理
 

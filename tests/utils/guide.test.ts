@@ -44,30 +44,31 @@ describe("calcGuideItem", () => {
 })
 
 describe("resolveGuidePrice", () => {
+  // 挂单倒卖口径：买价 = 市场 bid 侧（挂单买入），卖价 = 市场 ask 侧（挂单卖出）
   const market = { ask: 100, bid: 90, vol: 50 }
 
   it("无手动价时用市场价", () => {
     const r = resolveGuidePrice(null, market)
-    expect(r).toEqual({ ask: 100, bid: 90, vol: 50, hasManualPrice: false })
+    expect(r).toEqual({ buyPrice: 90, sellPrice: 100, vol: 50, hasManualPrice: false })
   })
 
-  it("手动买价优先于市场价", () => {
+  it("手动卖价（ask侧）优先于市场价", () => {
     const r = resolveGuidePrice({ ask: { manual: true, manualPrice: 88 } }, market)
-    expect(r.ask).toBe(88)
-    expect(r.bid).toBe(90)
+    expect(r.sellPrice).toBe(88)
+    expect(r.buyPrice).toBe(90)
     expect(r.hasManualPrice).toBe(true)
   })
 
   it("手动价 manual=false 时仍用市场价", () => {
     const r = resolveGuidePrice({ ask: { manual: false, manualPrice: 88 } }, market)
-    expect(r.ask).toBe(100)
+    expect(r.sellPrice).toBe(100)
     expect(r.hasManualPrice).toBe(false)
   })
 
-  it("手动卖价优先于市场价", () => {
+  it("手动买价（bid侧）优先于市场价", () => {
     const r = resolveGuidePrice({ bid: { manual: true, manualPrice: 95 } }, market)
-    expect(r.bid).toBe(95)
-    expect(r.ask).toBe(100)
+    expect(r.buyPrice).toBe(95)
+    expect(r.sellPrice).toBe(100)
     expect(r.hasManualPrice).toBe(true)
   })
 })
@@ -83,6 +84,7 @@ describe("isEquipmentItem", () => {
 describe("buildGuideRows", () => {
   const plainItem: any = { hrid: "/items/apple", name: "Apple", categoryHrid: "/item_categories/food", itemLevel: 1 }
   const equipItem: any = { hrid: "/items/test_sword", name: "Test Sword", categoryHrid: "/item_categories/equipment", itemLevel: 10, equipmentDetail: { type: "/equipment_types/sword" } }
+  // 市场 ask=100 / bid=120：挂单倒卖口径下 买价=120(bid)、卖价=100(ask)
   const priceGetter = (_hrid: string, level: number) => ({ ask: 100, bid: 120, vol: 10 + level })
   const manualGetter = () => null
 
@@ -91,7 +93,7 @@ describe("buildGuideRows", () => {
     expect(rows.length).toBe(1)
     expect(rows[0].level).toBe(0)
     expect(rows[0].name).toBe("苹果")
-    expect(rows[0].profitPP).toBe(120 * 0.95 - 100)
+    expect(rows[0].profitPP).toBe(100 * 0.95 - 120)
   })
 
   it("装备物品生成0级+8个强化等级共9行", () => {
@@ -106,7 +108,7 @@ describe("buildGuideRows", () => {
       hrid === "/items/apple" && level === 0 ? { ask: { manual: true, manualPrice: 95 } } : null
     const rows = buildGuideRows([plainItem], priceGetter, manualGetter2, 0.95)
     expect(rows[0].hasManualPrice).toBe(true)
-    expect(rows[0].ask).toBe(95)
+    expect(rows[0].sellPrice).toBe(95)
   })
 
   it("favorite 初始为 false", () => {
@@ -121,8 +123,8 @@ describe("filterGuideList", () => {
     level: 0,
     name: "Apple",
     item: { hrid: "/items/apple", name: "Apple", categoryHrid: "/item_categories/food", itemLevel: 10, equipmentDetail: undefined },
-    ask: 100,
-    bid: 120,
+    buyPrice: 120,
+    sellPrice: 100,
     vol: 50,
     profitPP: 14,
     profitRate: 0.14,
@@ -175,8 +177,8 @@ describe("sortGuideList", () => {
     level: 0,
     name: "X",
     item: {} as any,
-    ask: 1,
-    bid: 1,
+    buyPrice: 1,
+    sellPrice: 1,
     vol: 1,
     profitPP: 1,
     profitRate,
@@ -222,9 +224,9 @@ describe("sortGuideList", () => {
 
   it("vol 为 -1 的行按成交量排序时恒排最后", () => {
     const rows = [
-      { hrid: "/items/a", level: 0, name: "A", item: {} as any, ask: 1, bid: 1, vol: 50, profitPP: 1, profitRate: 0.1, profitPH: 100, profitPD: 2400, hasManualPrice: false, favorite: false },
-      { hrid: "/items/b", level: 0, name: "B", item: {} as any, ask: 1, bid: 1, vol: -1, profitPP: 1, profitRate: 0.1, profitPH: 100, profitPD: 2400, hasManualPrice: false, favorite: false },
-      { hrid: "/items/c", level: 0, name: "C", item: {} as any, ask: 1, bid: 1, vol: 10, profitPP: 1, profitRate: 0.1, profitPH: 100, profitPD: 2400, hasManualPrice: false, favorite: false }
+      { hrid: "/items/a", level: 0, name: "A", item: {} as any, buyPrice: 1, sellPrice: 1, vol: 50, profitPP: 1, profitRate: 0.1, profitPH: 100, profitPD: 2400, hasManualPrice: false, favorite: false },
+      { hrid: "/items/b", level: 0, name: "B", item: {} as any, buyPrice: 1, sellPrice: 1, vol: -1, profitPP: 1, profitRate: 0.1, profitPH: 100, profitPD: 2400, hasManualPrice: false, favorite: false },
+      { hrid: "/items/c", level: 0, name: "C", item: {} as any, buyPrice: 1, sellPrice: 1, vol: 10, profitPP: 1, profitRate: 0.1, profitPH: 100, profitPD: 2400, hasManualPrice: false, favorite: false }
     ]
     const asc = sortGuideList(rows, { prop: "vol", order: "ascending" })
     expect(asc.map(r => r.hrid)).toEqual(["/items/c", "/items/a", "/items/b"])
