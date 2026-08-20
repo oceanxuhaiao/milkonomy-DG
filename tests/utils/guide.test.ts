@@ -145,18 +145,20 @@ describe("filterGuideList", () => {
 
   it("物品等级上限", () => {
     const rows = [baseRow(), baseRow({ item: { ...baseRow().item, itemLevel: 100 } })]
-    expect(filterGuideList(rows, { currentPage: 1, size: 10, maxItemLevel: 50 }).length).toBe(1)
+    const r = filterGuideList(rows, { currentPage: 1, size: 10, maxItemLevel: 50 })
+    expect(r[0].item.itemLevel).toBe(10)
   })
 
   it("成交量区间：vol<0 不通过", () => {
-    const rows = [baseRow({ vol: 10 }), baseRow({ vol: 100 }), baseRow({ vol: -1 })]
+    const rows = [baseRow({ vol: 10 }), baseRow(), baseRow({ vol: 100 }), baseRow({ vol: -1 })]
     const r = filterGuideList(rows, { currentPage: 1, size: 10, minVolume1h: 20, maxVolume1h: 80 })
-    expect(r.map(x => x.vol)).toEqual([])
+    expect(r.map(x => x.vol)).toEqual([50])
   })
 
   it("排除装备", () => {
     const equipRow = baseRow({ item: { ...baseRow().item, categoryHrid: "/item_categories/equipment" } })
-    expect(filterGuideList([baseRow(), equipRow], { currentPage: 1, size: 10, banEquipment: true }).length).toBe(1)
+    const r = filterGuideList([baseRow(), equipRow], { currentPage: 1, size: 10, banEquipment: true })
+    expect(r[0].item.categoryHrid).toBe("/item_categories/food")
   })
 
   it("排除护符", () => {

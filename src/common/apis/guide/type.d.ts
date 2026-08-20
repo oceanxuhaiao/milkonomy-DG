@@ -21,6 +21,7 @@ export interface GuideRequestData {
   size: number
   includeTax?: boolean
   name?: string
+  /** 利润率下限（百分数，10 表示 10%） */
   profitRate?: number
   maxItemLevel?: number
   minVolume1h?: number
