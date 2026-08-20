@@ -201,6 +201,12 @@ describe("sortGuideList", () => {
     expect(sortGuideList(rows, { prop: "profitRate", order: "descending" }).map(r => r.profitRate)).toEqual([0.3, 0.1, 0.05])
   })
 
+  it("排序列同值时兜底按利润/h降序", () => {
+    const rows = [row(100, 0.1), row(300, 0.1)]
+    // profitRate 相同 → 触发兜底：profitPH 高的 300 排前面
+    expect(sortGuideList(rows, { prop: "profitRate", order: "descending" }).map(r => r.profitPH)).toEqual([300, 100])
+  })
+
   it("null 恒排最后（无论升降序）", () => {
     const rows = [row(null), row(300), row(null), row(100)]
     const desc = sortGuideList(rows, { prop: "profitPH", order: "descending" })
