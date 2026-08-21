@@ -1,5 +1,5 @@
 import { buildGuideRows, GUIDE_ENHANCE_LEVELS, resolveGuidePrice } from "@@/apis/guide/calc"
-import { buildHistoryTasks, type CachedHistory, calcHistoryStats, fetchHistoryPoints, getPriceTier, HISTORY_API_URL, HISTORY_CACHE_TTL, historyKeyOf, runHistoryFetch, toGuideHistoryData } from "@@/apis/guide/history"
+import { buildHistoryTasks, type CachedHistory, calcHistoryStats, fetchHistoryFile, fetchHistoryPoints, getPriceTier, HISTORY_API_URL, HISTORY_CACHE_TTL, historyKeyOf, parseHistoryFile, runHistoryFetch, toGuideHistoryData } from "@@/apis/guide/history"
 import { createPinia, setActivePinia } from "pinia"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { useGuideHistoryStore } from "@/pinia/stores/guide-history"
@@ -433,5 +433,67 @@ describe("buildGuideRows 注入历史", () => {
     expect(rows[0].priceDeviation).toBeNull()
     expect(rows[0].buyPrice).toBe(90)
     expect(rows[0].profitPP).toBe(100 * 0.95 - 90)
+  })
+})
+
+describe("parseHistoryFile", () => {
+  it("解析文件为 Map<key, HistoryPoint[]>（t→time 映射）", () => {
+    const file = {
+      updatedAt: 1787313960,
+      history: {
+        "/items/sugar|0": [{ t: 1787310360, a: 13, b: 12, p: 12, v: 3520 }],
+        "/items/sword|13": [{ t: 1787313960, a: 200, b: 190, p: -1, v: -1 }]
+      }
+    }
+    const map = parseHistoryFile(JSON.stringify(file))
+    expect(map.get("/items/sugar|0")).toEqual([{ time: 1787310360, a: 13, b: 12, p: 12, v: 3520 }])
+    expect(map.get("/items/sword|13")).toEqual([{ time: 1787313960, a: 200, b: 190, p: -1, v: -1 }])
+  })
+
+  it("损坏条目跳过，无 history 字段返回空 Map", () => {
+    const file = {
+      updatedAt: 1,
+      history: {
+        "/items/a|0": [{ t: "bad" }],
+        "/items/b|0": "not-array",
+        "/items/c|0": [{ t: 100, a: 1, b: 1, p: 1, v: 1 }]
+      }
+    }
+    const map = parseHistoryFile(JSON.stringify(file))
+    expect(map.has("/items/a|0")).toBe(false)
+    expect(map.has("/items/b|0")).toBe(false)
+    expect(map.get("/items/c|0")?.length).toBe(1)
+    expect(parseHistoryFile("{}").size).toBe(0)
+  })
+
+  it("非对象条目/缺 t 的条目跳过", () => {
+    const file = {
+      history: {
+        "/items/a|0": [null, { a: 1 }, { t: 100, a: 1, b: 1, p: 1, v: 1 }]
+      }
+    }
+    const map = parseHistoryFile(JSON.stringify(file))
+    expect(map.get("/items/a|0")?.length).toBe(1)
+  })
+})
+
+describe("fetchHistoryFile", () => {
+  it("成功下载并解析为 Map", async () => {
+    const file = { updatedAt: 1, history: { "/items/a|0": [{ t: 100, a: 1, b: 1, p: 1, v: 1 }] } }
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(file), { status: 200 })))
+    const map = await fetchHistoryFile()
+    expect(map.get("/items/a|0")?.length).toBe(1)
+  })
+
+  it("hTTP 失败重试 1 次后抛错", async () => {
+    const fetchMock = vi.fn(async () => new Response("err", { status: 500 }))
+    vi.stubGlobal("fetch", fetchMock)
+    await expect(fetchHistoryFile()).rejects.toThrow()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it("jSON 解析失败抛错", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("not-json{", { status: 200 })))
+    await expect(fetchHistoryFile()).rejects.toThrow()
   })
 })

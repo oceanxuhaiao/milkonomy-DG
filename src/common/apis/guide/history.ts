@@ -4,6 +4,9 @@ import { type GuideHistoryData, guideLevelsOf } from "./calc"
 /** 历史行情 API 地址（未来切换自建数据源只改此处） */
 export const HISTORY_API_URL = "https://q7.nainai.eu.org/api/market/history"
 
+/** 自建历史数据文件地址（GitHub Pages 静态托管，可配置） */
+export const HISTORY_FILE_URL = "https://oceanxuhaiao.github.io/milkonomy-history/history.json"
+
 /** 缓存过期时间：12 小时（保守频率，减轻第三方服务器负担） */
 export const HISTORY_CACHE_TTL = 12 * 60 * 60 * 1000
 
@@ -384,4 +387,57 @@ export const indexedDbHistoryCache: HistoryCache = {
   async set(key: string, value: CachedHistory) {
     await setIndexedDbValue(CACHE_KEY_PREFIX + key, value)
   }
+}
+
+/** 解析自建历史数据文件：t→time 字段映射；损坏条目跳过 */
+export function parseHistoryFile(json: string): Map<string, HistoryPoint[]> {
+  const map = new Map<string, HistoryPoint[]>()
+  let data: { history?: Record<string, unknown> }
+  try {
+    data = JSON.parse(json)
+  } catch {
+    return map
+  }
+  const history = data?.history
+  if (!history || typeof history !== "object") return map
+  for (const [key, value] of Object.entries(history)) {
+    if (!Array.isArray(value)) continue
+    const points: HistoryPoint[] = []
+    for (const raw of value) {
+      if (!raw || typeof raw !== "object") continue
+      const pt = raw as Record<string, unknown>
+      if (typeof pt.t !== "number") continue
+      points.push({
+        time: pt.t,
+        a: typeof pt.a === "number" ? pt.a : -1,
+        b: typeof pt.b === "number" ? pt.b : -1,
+        p: typeof pt.p === "number" ? pt.p : -1,
+        v: typeof pt.v === "number" ? pt.v : -1
+      })
+    }
+    if (points.length > 0) map.set(key, points)
+  }
+  return map
+}
+
+/** 下载自建历史数据文件（5 秒超时，失败重试 1 次，仍失败抛错） */
+export async function fetchHistoryFile(): Promise<Map<string, HistoryPoint[]>> {
+  let lastError: unknown = null
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5000)
+    try {
+      const res = await fetch(HISTORY_FILE_URL, { signal: controller.signal })
+      if (!res.ok) throw new Error(`历史数据文件请求失败: ${res.status}`)
+      const text = await res.text()
+      const map = parseHistoryFile(text)
+      if (map.size === 0) throw new Error("历史数据文件为空或格式错误")
+      return map
+    } catch (e) {
+      lastError = e
+    } finally {
+      clearTimeout(timeoutId)
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("历史数据文件请求失败")
 }
