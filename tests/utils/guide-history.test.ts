@@ -1,4 +1,4 @@
-import { GUIDE_ENHANCE_LEVELS } from "@@/apis/guide/calc"
+import { buildGuideRows, GUIDE_ENHANCE_LEVELS, resolveGuidePrice } from "@@/apis/guide/calc"
 import { buildHistoryTasks, type CachedHistory, calcHistoryStats, fetchHistoryPoints, getPriceTier, HISTORY_API_URL, HISTORY_CACHE_TTL, historyKeyOf, runHistoryFetch } from "@@/apis/guide/history"
 import { createPinia, setActivePinia } from "pinia"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -302,5 +302,78 @@ describe("guide-history store", () => {
     await Promise.all([p1, p2])
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(store.ready).toBe(true)
+  })
+})
+
+describe("resolveGuidePrice 三级兜底", () => {
+  const market = { ask: 100, bid: 90, vol: 50 }
+
+  it("无历史时回落快照", () => {
+    const r = resolveGuidePrice(null, market, null)
+    expect(r.buyPrice).toBe(90)
+    expect(r.sellPrice).toBe(100)
+    expect(r.vol).toBe(50)
+    expect(r.hasHistory).toBe(false)
+    expect(r.priceDeviation).toBeNull()
+  })
+
+  it("历史值优先于快照（买=中位b、卖=中位a、量=均量）", () => {
+    const history = { medianBuy: 88, medianSell: 96, avgVol: 40 }
+    const r = resolveGuidePrice(null, market, history)
+    expect(r.buyPrice).toBe(88)
+    expect(r.sellPrice).toBe(96)
+    expect(r.vol).toBe(40)
+    expect(r.hasHistory).toBe(true)
+    expect(r.priceDeviation).toEqual({ buy: (90 - 88) / 88, sell: (100 - 96) / 96 })
+  })
+
+  it("手动价最高优先，对应侧偏差为 null", () => {
+    const history = { medianBuy: 88, medianSell: 96, avgVol: 40 }
+    const r = resolveGuidePrice({ bid: { manual: true, manualPrice: 85 } }, market, history)
+    expect(r.buyPrice).toBe(85)
+    expect(r.sellPrice).toBe(96)
+    expect(r.priceDeviation).toEqual({ buy: null, sell: (100 - 96) / 96 })
+  })
+
+  it("历史中位价无效(<=0)时该侧回落快照", () => {
+    const history = { medianBuy: -1, medianSell: 96, avgVol: 40 }
+    const r = resolveGuidePrice(null, market, history)
+    expect(r.buyPrice).toBe(90)
+    expect(r.sellPrice).toBe(96)
+  })
+
+  it("历史均量无效(<0)时量回落快照", () => {
+    const history = { medianBuy: 88, medianSell: 96, avgVol: -1 }
+    const r = resolveGuidePrice(null, market, history)
+    expect(r.vol).toBe(50)
+  })
+
+  it("快照价无效(<=0)时偏差为 null", () => {
+    const history = { medianBuy: 88, medianSell: 96, avgVol: 40 }
+    const r = resolveGuidePrice(null, { ask: -1, bid: 90, vol: 50 }, history)
+    expect(r.priceDeviation).toEqual({ buy: (90 - 88) / 88, sell: null })
+  })
+})
+
+describe("buildGuideRows 注入历史", () => {
+  const plainItem: any = { hrid: "/items/apple", name: "Apple", categoryHrid: "/item_categories/food", itemLevel: 1 }
+  const priceGetter = (_hrid: string, _level: number) => ({ ask: 100, bid: 90, vol: 50 })
+  const manualGetter = () => null
+
+  it("historyGetter 命中时行含 hasHistory 与偏差", () => {
+    const historyGetter = () => ({ medianBuy: 88, medianSell: 96, avgVol: 40 })
+    const rows = buildGuideRows([plainItem], priceGetter, manualGetter, 0.95, historyGetter)
+    expect(rows[0].hasHistory).toBe(true)
+    expect(rows[0].buyPrice).toBe(88)
+    expect(rows[0].vol).toBe(40)
+    expect(rows[0].profitPP).toBe(96 * 0.95 - 88)
+  })
+
+  it("historyGetter 返回 null 时行为与原来一致", () => {
+    const rows = buildGuideRows([plainItem], priceGetter, manualGetter, 0.95, () => null)
+    expect(rows[0].hasHistory).toBe(false)
+    expect(rows[0].priceDeviation).toBeNull()
+    expect(rows[0].buyPrice).toBe(90)
+    expect(rows[0].profitPP).toBe(100 * 0.95 - 90)
   })
 })

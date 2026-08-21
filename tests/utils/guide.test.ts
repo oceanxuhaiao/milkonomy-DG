@@ -49,7 +49,7 @@ describe("resolveGuidePrice", () => {
 
   it("无手动价时用市场价", () => {
     const r = resolveGuidePrice(null, market)
-    expect(r).toEqual({ buyPrice: 90, sellPrice: 100, vol: 50, hasManualPrice: false })
+    expect(r).toEqual({ buyPrice: 90, sellPrice: 100, vol: 50, hasManualPrice: false, hasHistory: false, priceDeviation: null })
   })
 
   it("手动卖价（ask侧）优先于市场价", () => {
@@ -224,9 +224,9 @@ describe("sortGuideList", () => {
 
   it("vol 为 -1 的行按成交量排序时恒排最后", () => {
     const rows = [
-      { hrid: "/items/a", level: 0, name: "A", item: {} as any, buyPrice: 1, sellPrice: 1, vol: 50, profitPP: 1, profitRate: 0.1, profitPH: 100, profitPD: 2400, hasManualPrice: false, favorite: false },
-      { hrid: "/items/b", level: 0, name: "B", item: {} as any, buyPrice: 1, sellPrice: 1, vol: -1, profitPP: 1, profitRate: 0.1, profitPH: 100, profitPD: 2400, hasManualPrice: false, favorite: false },
-      { hrid: "/items/c", level: 0, name: "C", item: {} as any, buyPrice: 1, sellPrice: 1, vol: 10, profitPP: 1, profitRate: 0.1, profitPH: 100, profitPD: 2400, hasManualPrice: false, favorite: false }
+      { hrid: "/items/a", level: 0, name: "A", item: {} as any, buyPrice: 1, sellPrice: 1, vol: 50, profitPP: 1, profitRate: 0.1, profitPH: 100, profitPD: 2400, hasManualPrice: false, hasHistory: false, priceDeviation: null, favorite: false },
+      { hrid: "/items/b", level: 0, name: "B", item: {} as any, buyPrice: 1, sellPrice: 1, vol: -1, profitPP: 1, profitRate: 0.1, profitPH: 100, profitPD: 2400, hasManualPrice: false, hasHistory: false, priceDeviation: null, favorite: false },
+      { hrid: "/items/c", level: 0, name: "C", item: {} as any, buyPrice: 1, sellPrice: 1, vol: 10, profitPP: 1, profitRate: 0.1, profitPH: 100, profitPD: 2400, hasManualPrice: false, hasHistory: false, priceDeviation: null, favorite: false }
     ]
     const asc = sortGuideList(rows, { prop: "vol", order: "ascending" })
     expect(asc.map(r => r.hrid)).toEqual(["/items/c", "/items/a", "/items/b"])

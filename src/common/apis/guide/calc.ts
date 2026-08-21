@@ -40,18 +40,50 @@ export interface GuideManualPrice {
   bid?: { manual: boolean, manualPrice?: number }
 }
 
+/** 历史行情注入数据（由 store 提供；值无效时回落快照） */
+export interface GuideHistoryData {
+  /** 1d 买价中位数，<=0 无效 */
+  medianBuy: number
+  /** 1d 卖价中位数，<=0 无效 */
+  medianSell: number
+  /** 5d 平均每小时成交量，<0 无效 */
+  avgVol: number
+}
+
 /**
- * 挂单倒卖口径的价格解析：买价取市场 bid 侧（挂单买入），卖价取市场 ask 侧（挂单卖出）。
- * 手动价优先，否则市场价；vol 恒取市场值。
+ * 挂单倒卖口径的价格解析，三级兜底：
+ * 买价 = 手动(bid侧) > 1d历史中位买价 > 市场 bid；卖价同理取 ask 侧；成交量 = 5d均量 > 快照。
  */
-export function resolveGuidePrice(manual: GuideManualPrice | null | undefined, market: GuideMarketPrice) {
-  const buyPrice = manual?.bid?.manual ? manual.bid.manualPrice! : market.bid
-  const sellPrice = manual?.ask?.manual ? manual.ask.manualPrice! : market.ask
+export function resolveGuidePrice(
+  manual: GuideManualPrice | null | undefined,
+  market: GuideMarketPrice,
+  history?: GuideHistoryData | null
+) {
+  const buyPrice = manual?.bid?.manual
+    ? manual.bid.manualPrice!
+    : history && history.medianBuy > 0 ? history.medianBuy : market.bid
+  const sellPrice = manual?.ask?.manual
+    ? manual.ask.manualPrice!
+    : history && history.medianSell > 0 ? history.medianSell : market.ask
+  const vol = history && history.avgVol >= 0 ? history.avgVol : market.vol
+  const hasHistory = !!(history && (history.medianBuy > 0 || history.medianSell > 0 || history.avgVol >= 0))
+  const priceDeviation = hasHistory
+    ? {
+        buy: history!.medianBuy > 0 && !manual?.bid?.manual && market.bid > 0
+          ? (market.bid - history!.medianBuy) / history!.medianBuy
+          : null,
+        sell: history!.medianSell > 0 && !manual?.ask?.manual && market.ask > 0
+          ? (market.ask - history!.medianSell) / history!.medianSell
+          : null
+      }
+    : null
   return {
     buyPrice,
     sellPrice,
-    vol: market.vol,
-    hasManualPrice: !!manual?.ask?.manual || !!manual?.bid?.manual
+    vol,
+    hasManualPrice: !!manual?.ask?.manual || !!manual?.bid?.manual,
+    hasHistory,
+    priceDeviation
   }
 }
 
@@ -62,18 +94,27 @@ export interface GuideManualGetter {
   (hrid: string, level: number): GuideManualPrice | null
 }
 
+export interface GuideHistoryGetter {
+  (hrid: string, level: number): GuideHistoryData | null
+}
+
 /** 生成导购行：普通物品 0 级一行；装备额外 +5/+7/+8/+10/+12~+15 */
 export function buildGuideRows(
   items: GuideItem["item"][],
   priceGetter: GuidePriceGetter,
   manualGetter: GuideManualGetter,
-  taxFactor: number
+  taxFactor: number,
+  historyGetter?: GuideHistoryGetter
 ): GuideItem[] {
   const rows: GuideItem[] = []
   for (const item of items) {
     const levels = guideLevelsOf(item)
     for (const level of levels) {
-      const price = resolveGuidePrice(manualGetter(item.hrid, level), priceGetter(item.hrid, level))
+      const price = resolveGuidePrice(
+        manualGetter(item.hrid, level),
+        priceGetter(item.hrid, level),
+        historyGetter?.(item.hrid, level)
+      )
       const profit = calcGuideItem(price.buyPrice, price.sellPrice, price.vol, taxFactor)
       rows.push({
         hrid: item.hrid,
