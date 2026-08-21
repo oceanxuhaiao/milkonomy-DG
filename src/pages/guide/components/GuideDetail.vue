@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { GuideHistoryStats, WindowReport } from "@@/apis/guide/history"
 import type { GuideItem } from "@@/apis/guide/type"
-import { calcHistoryStats, fetchHistoryPoints, historyKeyOf } from "@@/apis/guide/history"
+import { historyKeyOf } from "@@/apis/guide/history"
 import ItemIcon from "@@/components/ItemIcon/index.vue"
 import * as Format from "@/common/utils/format"
 import { useGuideHistoryStore } from "@/pinia/stores/guide-history"
@@ -28,41 +28,19 @@ const historyStore = useGuideHistoryStore()
 const historyState = ref<"loading" | "ready" | "none" | "failed">("loading")
 const historyStats = ref<GuideHistoryStats | null>(null)
 
-let reqSeq = 0
-watch(() => props.data, async (row) => {
+watch(() => props.data, (row) => {
   historyState.value = "loading"
   historyStats.value = null
   if (!row) return
-  const key = historyKeyOf(row.hrid, row.level)
-  const seq = ++reqSeq
-  // store 三态：有统计值 → ready；null（无有效记录）→ none；"failed" → failed；undefined（未抓取）→ 按需单查
-  const cached = historyStore.data.get(key)
-  if (cached !== undefined) {
-    if (cached === null) {
-      historyState.value = "none"
-    } else if (cached === "failed") {
-      historyState.value = "failed"
-    } else {
-      historyStats.value = cached
-      historyState.value = "ready"
-    }
-    return
-  }
-  try {
-    const points = await fetchHistoryPoints(row.hrid, row.level)
-    if (seq !== reqSeq) return // 已切换物品，丢弃过期结果
-    const stats = calcHistoryStats(points)
-    historyStore.data.set(key, stats) // 回写 store，避免重复请求
-    if (stats) {
-      historyStats.value = stats
-      historyState.value = "ready"
-    } else {
-      historyState.value = "none"
-    }
-  } catch {
-    if (seq !== reqSeq) return
-    historyStore.data.set(key, "failed") // 仅内存标记；刷新后 ensureLoaded 会重新抓取
+  // 全量文件模式：store.data 已含全部组合；缺失即无交易记录
+  const cached = historyStore.data.get(historyKeyOf(row.hrid, row.level))
+  if (cached === null || cached === undefined) {
+    historyState.value = "none"
+  } else if (cached === "failed") {
     historyState.value = "failed"
+  } else {
+    historyStats.value = cached
+    historyState.value = "ready"
   }
 }, { immediate: true })
 
