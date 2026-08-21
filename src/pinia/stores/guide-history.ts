@@ -36,6 +36,8 @@ export const useGuideHistoryStore = defineStore("guideHistory", {
      */
     async ensureLoaded(cache: HistoryCache = indexedDbHistoryCache) {
       if (this.progress) return
+      // 占位进度：在首个 await 前设置，防止下载窗口内（页面 setup 调用 + watch 二次调用）重入重复下载
+      this.progress = { done: 0, total: 1 }
       try {
         let file: HistoryFileCache | null = null
         const cached = await cache.get(CACHE_KEY) as HistoryFileCache | null
@@ -46,8 +48,13 @@ export const useGuideHistoryStore = defineStore("guideHistory", {
           const history: Record<string, HistoryPoint[]> = {}
           for (const [key, points] of map) history[key] = points
           file = { fetchedAt: Date.now(), history }
-          // HistoryCache.set 形参是旧 CachedHistory 形状；本缓存条目的运行时值即 HistoryFileCache
-          await cache.set(CACHE_KEY, file as unknown as CachedHistory)
+          try {
+            // HistoryCache.set 形参是旧 CachedHistory 形状；本缓存条目的运行时值即 HistoryFileCache
+            await cache.set(CACHE_KEY, file as unknown as CachedHistory)
+          } catch (e) {
+            // 缓存写入失败不应阻断已下载数据的分发
+            console.error("历史数据缓存写入失败:", e)
+          }
         }
 
         const keys = Object.keys(file.history)
