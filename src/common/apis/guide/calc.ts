@@ -59,21 +59,30 @@ export function resolveGuidePrice(
   market: GuideMarketPrice,
   history?: GuideHistoryData | null
 ) {
+  const h = history ?? null
+  const validBuy = !!h && h.medianBuy > 0
+  const validSell = !!h && h.medianSell > 0
+  const validVol = !!h && h.avgVol >= 0
+  const hasHistory = validBuy || validSell || validVol
+  // 有效性标志已保证对应值可用，提取局部变量消除 h! 非空断言
+  const hb = h?.medianBuy ?? 0
+  const hs = h?.medianSell ?? 0
+  const hv = h?.avgVol ?? -1
+
   const buyPrice = manual?.bid?.manual
     ? manual.bid.manualPrice!
-    : history && history.medianBuy > 0 ? history.medianBuy : market.bid
+    : validBuy ? hb : market.bid
   const sellPrice = manual?.ask?.manual
     ? manual.ask.manualPrice!
-    : history && history.medianSell > 0 ? history.medianSell : market.ask
-  const vol = history && history.avgVol >= 0 ? history.avgVol : market.vol
-  const hasHistory = !!(history && (history.medianBuy > 0 || history.medianSell > 0 || history.avgVol >= 0))
+    : validSell ? hs : market.ask
+  const vol = validVol ? hv : market.vol
   const priceDeviation = hasHistory
     ? {
-        buy: history!.medianBuy > 0 && !manual?.bid?.manual && market.bid > 0
-          ? (market.bid - history!.medianBuy) / history!.medianBuy
+        buy: validBuy && !manual?.bid?.manual && market.bid > 0
+          ? (market.bid - hb) / hb
           : null,
-        sell: history!.medianSell > 0 && !manual?.ask?.manual && market.ask > 0
-          ? (market.ask - history!.medianSell) / history!.medianSell
+        sell: validSell && !manual?.ask?.manual && market.ask > 0
+          ? (market.ask - hs) / hs
           : null
       }
     : null

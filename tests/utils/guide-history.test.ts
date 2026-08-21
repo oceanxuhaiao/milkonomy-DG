@@ -340,12 +340,26 @@ describe("resolveGuidePrice 三级兜底", () => {
     const r = resolveGuidePrice(null, market, history)
     expect(r.buyPrice).toBe(90)
     expect(r.sellPrice).toBe(96)
+    expect(r.hasHistory).toBe(true)
   })
 
   it("历史均量无效(<0)时量回落快照", () => {
     const history = { medianBuy: 88, medianSell: 96, avgVol: -1 }
     const r = resolveGuidePrice(null, market, history)
     expect(r.vol).toBe(50)
+  })
+
+  it("历史均量为0时视为有效（vol=0 而非回落快照）", () => {
+    const history = { medianBuy: 88, medianSell: 96, avgVol: 0 }
+    const r = resolveGuidePrice(null, market, history)
+    expect(r.vol).toBe(0)
+    expect(r.hasHistory).toBe(true)
+  })
+
+  it("历史三值全无效时 hasHistory 为 false", () => {
+    const r = resolveGuidePrice(null, market, { medianBuy: -1, medianSell: -1, avgVol: -1 })
+    expect(r.hasHistory).toBe(false)
+    expect(r.priceDeviation).toBeNull()
   })
 
   it("快照价无效(<=0)时偏差为 null", () => {
