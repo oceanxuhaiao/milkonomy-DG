@@ -57,7 +57,8 @@ describe("calcHistoryStats", () => {
   })
 
   it("买/卖盘估算：p>=ask 计买盘、p<=bid 计卖盘", () => {
-    // 同一小时内：avgAsk=15, avgBid=10
+    // 三个点落在 3 个连续小时，各小时 avgAsk=15/avgBid=10 相同；
+    // 跨小时 lastAvg 回退路径同时被覆盖
     const points = [
       pt(2, 15, 10, 16, 30), // p 16 >= 15 → 买盘
       pt(3, 15, 10, 9, 20), // p 9 <= 10 → 卖盘
@@ -80,10 +81,13 @@ describe("calcHistoryStats", () => {
   })
 
   it("min/max 经价格档位修正", () => {
-    const points = [pt(2, 15, 10, 16, 5), pt(3, 15, 10, 9, 5)]
+    // 用非档位价格，硬编码期望以独立验证 direction 参数
+    const points = [pt(2, 15, 10, 16.7, 5), pt(3, 15, 10, 9.5, 5)]
     const s = calcHistoryStats(points, NOW)!
-    expect(s.report["1d"].minPrice).toBe(getPriceTier(9, "down"))
-    expect(s.report["1d"].maxPrice).toBe(getPriceTier(16, "up"))
+    // getPriceTier(9.5,"down")：trunc=9，1 位 9 开头 step=1，9%1=0 → 9
+    expect(s.report["1d"].minPrice).toBe(9)
+    // getPriceTier(16.7,"up")：trunc=16，2 位 1 开头 step=1，16%1=0 → 16
+    expect(s.report["1d"].maxPrice).toBe(16)
   })
 })
 
@@ -102,5 +106,18 @@ describe("getPriceTier", () => {
     expect(getPriceTier(1600, "up")).toBe(1600)
     // 58000：5 开头 5 位 → step=2*10^(5-3)=200，58000 恰在档位上 → 58000
     expect(getPriceTier(58000, "down")).toBe(58000)
+  })
+
+  it("进位/取整分支与无效输入", () => {
+    // 1617：1 开头 4 位 step=5，1617%5=2 → down 退到 1615，up 进一档 1620
+    expect(getPriceTier(1617, "up")).toBe(1620)
+    expect(getPriceTier(1617, "down")).toBe(1615)
+    // 58050：5 开头 5 位 step=2*10^2=200，58050%200=50 → down 退到 58000
+    expect(getPriceTier(58050, "down")).toBe(58000)
+    // 无效输入（price<=0）返回 0
+    expect(getPriceTier(0, "down")).toBe(0)
+    expect(getPriceTier(-5, "up")).toBe(0)
+    // trunc 后 <=1 返回 2
+    expect(getPriceTier(1, "down")).toBe(2)
   })
 })
