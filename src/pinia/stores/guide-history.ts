@@ -2,7 +2,6 @@ import { defineStore } from "pinia"
 import {
   buildHistoryTasks,
   calcHistoryStats,
-  fetchHistoryPoints,
   type GuideHistoryStats,
   HISTORY_CACHE_TTL,
   type HistoryCache,
@@ -15,10 +14,13 @@ import {
 import { pinia } from "@/pinia"
 import { useGameStoreOutside } from "./game"
 
+/** 历史条目三态：统计值 / 无有效记录(5d窗口无数据，三级兜底视同无历史) / 抓取失败 */
+type GuideHistoryEntry = GuideHistoryStats | "failed" | null
+
 export const useGuideHistoryStore = defineStore("guideHistory", {
   state: () => ({
-    /** key = {hrid}|{level}，值为历史统计或抓取失败标记 */
-    data: new Map<string, GuideHistoryStats | "failed" | null>(),
+    /** key = {hrid}|{level}，值三态：统计值 / 无有效记录 null / 抓取失败 "failed" */
+    data: new Map<string, GuideHistoryEntry>(),
     progress: null as { done: number, total: number } | null,
     ready: false,
     /** 数据版本号：每次抓取完成一条 +1，页面 watch 此值触发重算 */
@@ -34,11 +36,14 @@ export const useGuideHistoryStore = defineStore("guideHistory", {
       cache: HistoryCache = indexedDbHistoryCache,
       opts: RunHistoryFetchOptions = {}
     ) {
-      if (this.ready && this.progress) return // 已有抓取在进行
+      // 加载/抓取进行中防重入；完成后 progress=null、ready=true，再次调用允许增量刷新
+      if (this.progress) return
       const itemList = items ?? Object.values(useGameStoreOutside().gameData?.itemDetailMap ?? {})
       if (itemList.length === 0) return
 
       const tasks = buildHistoryTasks(itemList)
+      // 先占位 progress，堵住下方缓存读取（await）窗口内的并发调用
+      this.progress = { done: 0, total: tasks.length }
       const pending: HistoryTask[] = []
 
       // 读缓存：未过期直接进 data，过期/缺失入队
@@ -80,21 +85,6 @@ export const useGuideHistoryStore = defineStore("guideHistory", {
       this.progress = null
       this.ready = true
       this.version++
-    },
-    /** 按需单查（详情弹窗用）：先查缓存，无则请求并写缓存 */
-    async fetchOne(hrid: string, level: number): Promise<GuideHistoryStats | "failed" | null> {
-      const key = historyKeyOf(hrid, level)
-      const cached = await indexedDbHistoryCache.get(key)
-      if (cached) {
-        return calcHistoryStats(cached.points)
-      }
-      try {
-        const points = await fetchHistoryPoints(hrid, level)
-        await indexedDbHistoryCache.set(key, { points, fetchedAt: Date.now() })
-        return calcHistoryStats(points)
-      } catch {
-        return "failed"
-      }
     }
   }
 })

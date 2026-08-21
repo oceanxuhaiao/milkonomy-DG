@@ -284,4 +284,23 @@ describe("guide-history store", () => {
     expect(store.ready).toBe(true)
     expect(store.data.get("/items/a|0")).toBe("failed")
   })
+
+  it("抓取中重复调用 ensureLoaded 不重复抓取", async () => {
+    let resolveFetch!: (r: Response) => void
+    const gate = new Promise<Response>((r) => {
+      resolveFetch = r
+    })
+    const fetchMock = vi.fn(async () => gate)
+    vi.stubGlobal("fetch", fetchMock)
+    const cache = { get: vi.fn(async () => null), set: vi.fn(async () => undefined) }
+    const items: any[] = [{ hrid: "/items/a", categoryHrid: "/item_categories/food" }]
+    const store = makeStore()
+    const p1 = store.ensureLoaded(items, cache as any, { gapMs: 0 })
+    const p2 = store.ensureLoaded(items, cache as any, { gapMs: 0 })
+    await Promise.resolve()
+    resolveFetch(new Response(JSON.stringify([]), { status: 200 }))
+    await Promise.all([p1, p2])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(store.ready).toBe(true)
+  })
 })
