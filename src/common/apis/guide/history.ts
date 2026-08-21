@@ -1,4 +1,5 @@
-import { GUIDE_ENHANCE_LEVELS, isEquipmentItem } from "./calc"
+import { getIndexedDbValue, setIndexedDbValue } from "@/common/utils/cache/indexed-db"
+import { guideLevelsOf } from "./calc"
 
 /** 历史行情 API 地址（未来切换自建数据源只改此处） */
 export const HISTORY_API_URL = "https://q7.nainai.eu.org/api/market/history"
@@ -250,7 +251,7 @@ export interface HistoryTask {
 export function buildHistoryTasks(items: { hrid: string, categoryHrid?: string }[]): HistoryTask[] {
   const tasks: HistoryTask[] = []
   for (const item of items) {
-    const levels = isEquipmentItem(item) ? [0, ...GUIDE_ENHANCE_LEVELS] : [0]
+    const levels = guideLevelsOf(item)
     for (const level of levels) {
       tasks.push({ hrid: item.hrid, level })
     }
@@ -326,7 +327,7 @@ export async function runHistoryFetch(
 
       if (result === "failed") {
         consecutiveFailures++
-        if (consecutiveFailures >= failLimit) {
+        if (consecutiveFailures >= failLimit && !aborted) {
           aborted = true
           options.onAbort?.()
         }
@@ -343,4 +344,28 @@ export async function runHistoryFetch(
   }
 
   await Promise.all(Array.from({ length: HISTORY_CONCURRENCY }, () => worker()))
+}
+
+export interface CachedHistory {
+  points: HistoryPoint[]
+  fetchedAt: number
+}
+
+/** 缓存读写接口（可注入 fake 用于测试） */
+export interface HistoryCache {
+  get: (key: string) => Promise<CachedHistory | null>
+  set: (key: string, value: CachedHistory) => Promise<void>
+}
+
+const CACHE_KEY_PREFIX = "gh:"
+
+/** IndexedDB 实现：复用现有 milkonomy-cache 库，key 前缀 gh: 隔离 */
+export const indexedDbHistoryCache: HistoryCache = {
+  async get(key: string) {
+    const value = await getIndexedDbValue<CachedHistory>(CACHE_KEY_PREFIX + key)
+    return value ?? null
+  },
+  async set(key: string, value: CachedHistory) {
+    await setIndexedDbValue(CACHE_KEY_PREFIX + key, value)
+  }
 }

@@ -1,6 +1,8 @@
 import { GUIDE_ENHANCE_LEVELS } from "@@/apis/guide/calc"
-import { buildHistoryTasks, calcHistoryStats, fetchHistoryPoints, getPriceTier, HISTORY_API_URL, historyKeyOf, runHistoryFetch } from "@@/apis/guide/history"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { buildHistoryTasks, type CachedHistory, calcHistoryStats, fetchHistoryPoints, getPriceTier, HISTORY_API_URL, HISTORY_CACHE_TTL, historyKeyOf, runHistoryFetch } from "@@/apis/guide/history"
+import { createPinia, setActivePinia } from "pinia"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { useGuideHistoryStore } from "@/pinia/stores/guide-history"
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -201,17 +203,85 @@ describe("runHistoryFetch", () => {
     expect(progress[progress.length - 1]).toBe(3)
   })
 
-  it("连续失败达到上限时中止本轮", async () => {
+  it("连续失败达到上限时中止本轮，onAbort 仅调用一次", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("err", { status: 500 })))
     let aborted = false
+    const onAbort = vi.fn(() => {
+      aborted = true
+    })
     await runHistoryFetch(
       Array.from({ length: 5 }, (_, i) => ({ hrid: `/items/x${i}`, level: 0 })),
       () => undefined,
       undefined,
-      { gapMs: 0, failLimit: 3, onAbort: () => {
-        aborted = true
-      } }
+      { gapMs: 0, failLimit: 3, onAbort }
     )
     expect(aborted).toBe(true)
+    expect(onAbort).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("guide-history store", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  function makeStore(overrides: Partial<ReturnType<typeof useGuideHistoryStore>> = {}) {
+    const store = useGuideHistoryStore()
+    return Object.assign(store, overrides)
+  }
+
+  it("ensureLoaded：缓存未过期直接用，缺失/过期条目抓取", async () => {
+    const now = Date.now()
+    // 数据点时间取 1 小时前，保证落在 calcHistoryStats 的 5d 统计窗口内
+    const t = Math.floor(now / 1000) - 3600
+    const cache = {
+      get: vi.fn(async (key: string): Promise<CachedHistory | null> => key === "/items/fresh|0"
+        ? { points: [{ time: t, a: 2, b: 1, p: 1.5, v: 3 }], fetchedAt: now - 1000 }
+        : key === "/items/stale|0"
+          ? { points: [{ time: t, a: 2, b: 1, p: 1.5, v: 3 }], fetchedAt: now - HISTORY_CACHE_TTL - 1 }
+          : null),
+      set: vi.fn(async () => undefined)
+    }
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      const hrid = decodeURIComponent(String(url).split("item_id=")[1].split("&")[0])
+      const level = String(url).split("variant=")[1].split("&")[0]
+      return new Response(JSON.stringify(hrid === "/items/missing" && level === "0"
+        ? [{ time: t, a: 5, b: 4, p: 4.5, v: 6 }]
+        : []), { status: 200 })
+    }))
+
+    const items: any[] = [
+      { hrid: "/items/fresh", categoryHrid: "/item_categories/food" },
+      { hrid: "/items/stale", categoryHrid: "/item_categories/food" },
+      { hrid: "/items/missing", categoryHrid: "/item_categories/food" }
+    ]
+
+    const store = makeStore()
+    await store.ensureLoaded(items, cache as any, { gapMs: 0 })
+    expect(store.ready).toBe(true)
+    expect(store.progress).toBeNull()
+    // fresh 走缓存
+    expect(store.data.get("/items/fresh|0")).toBeTruthy()
+    expect(cache.get).toHaveBeenCalledWith("/items/fresh|0")
+    // stale 与 missing 被抓取并写缓存
+    expect(cache.set).toHaveBeenCalledWith("/items/stale|0", expect.objectContaining({ points: expect.any(Array) }))
+    expect(cache.set).toHaveBeenCalledWith("/items/missing|0", expect.objectContaining({ points: expect.any(Array) }))
+    // 抓取到的数据进 store
+    const missing = store.data.get("/items/missing|0") as any
+    expect(missing.medianBuy1d).toBe(4)
+    expect(missing.medianSell1d).toBe(5)
+  })
+
+  it("请求失败标记 failed，不影响 ready", async () => {
+    const cache = { get: vi.fn(async () => null), set: vi.fn(async () => undefined) }
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("err", { status: 500 })))
+
+    const items: any[] = [{ hrid: "/items/a", categoryHrid: "/item_categories/food" }]
+    const store = makeStore()
+    await store.ensureLoaded(items, cache as any, { gapMs: 0, failLimit: 10 })
+    expect(store.ready).toBe(true)
+    expect(store.data.get("/items/a|0")).toBe("failed")
   })
 })

@@ -24,6 +24,11 @@ export function isEquipmentItem(item: { categoryHrid?: string }) {
   return item.categoryHrid === "/item_categories/equipment"
 }
 
+/** 物品的导购行等级列表：普通物品 [0]，装备 [0, ...GUIDE_ENHANCE_LEVELS] */
+export function guideLevelsOf(item: { categoryHrid?: string }): number[] {
+  return isEquipmentItem(item) ? [0, ...GUIDE_ENHANCE_LEVELS] : [0]
+}
+
 export interface GuideMarketPrice {
   ask: number
   bid: number
@@ -66,7 +71,7 @@ export function buildGuideRows(
 ): GuideItem[] {
   const rows: GuideItem[] = []
   for (const item of items) {
-    const levels = isEquipmentItem(item) ? [0, ...GUIDE_ENHANCE_LEVELS] : [0]
+    const levels = guideLevelsOf(item)
     for (const level of levels) {
       const price = resolveGuidePrice(manualGetter(item.hrid, level), priceGetter(item.hrid, level))
       const profit = calcGuideItem(price.buyPrice, price.sellPrice, price.vol, taxFactor)
