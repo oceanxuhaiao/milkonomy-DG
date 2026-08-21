@@ -5,11 +5,14 @@ import { useGuideFavoriteStoreOutside } from "@/pinia/stores/guide-favorite"
 import { getGameDataApi, getPriceOf } from "../game"
 import { getManualPriceOf } from "../price"
 import { buildGuideRows, filterGuideList, guidePage, sortGuideList } from "./calc"
-import { type GuideHistoryStats, historyKeyOf, toGuideHistoryData } from "./history"
+import { type GuideHistoryEntry, historyKeyOf, toGuideHistoryData } from "./history"
 
 export interface GuideApiParams extends GuideRequestData {
-  /** 历史行情数据（key = {hrid}|{level}），可选 */
-  historyData?: Map<string, GuideHistoryStats | "failed" | null>
+  /**
+   * 历史行情数据（key = {hrid}|{level}），可选。
+   * 值三态：GuideHistoryStats 统计值（参与三级兜底）/ null 无有效记录（视同无历史）/ "failed" 抓取失败（回落快照）。
+   */
+  historyData?: Map<string, GuideHistoryEntry>
 }
 
 /** 查：导购列表（挂单倒卖口径；价格固定 ask/bid 快照，历史数据注入后三级兜底） */

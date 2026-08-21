@@ -11,12 +11,27 @@ import { useMemory } from "@/common/composables/useMemory"
 import * as Format from "@/common/utils/format"
 import { useGameStore } from "@/pinia/stores/game"
 import { useGuideFavoriteStore } from "@/pinia/stores/guide-favorite"
+import { useGuideHistoryStore } from "@/pinia/stores/guide-history"
 import { usePriceStore } from "@/pinia/stores/price"
 import GuideDetail from "./components/GuideDetail.vue"
 import GuidePrice from "./components/GuidePrice.vue"
 
 // #region 查
 const favoriteStore = useGuideFavoriteStore()
+const historyStore = useGuideHistoryStore()
+
+// 进入页面自动增量抓取历史数据
+historyStore.ensureLoaded()
+
+function formatDeviation(dev: { buy: number | null, sell: number | null } | null, row: GuideItem) {
+  if (!row.hasHistory) return null
+  if (!dev) return null
+  const parts: string[] = []
+  if (dev.buy !== null) parts.push(`买 ${dev.buy >= 0 ? "+" : ""}${(dev.buy * 100).toFixed(1)}%`)
+  if (dev.sell !== null) parts.push(`卖 ${dev.sell >= 0 ? "+" : ""}${(dev.sell * 100).toFixed(1)}%`)
+  return parts.length > 0 ? parts.join(" · ") : null
+}
+
 const { paginationData: paginationDataGD, handleCurrentChange: handleCurrentChangeGD, handleSizeChange: handleSizeChangeGD } = usePagination({}, "guide-pagination")
 
 const guideData = ref<GuideItem[]>([])
@@ -46,7 +61,8 @@ const getGuideData = debounce(() => {
       size: paginationDataGD.pageSize,
       includeTax: includeTax.value,
       ...gdSearchData.value,
-      sort: sortGD.value
+      sort: sortGD.value,
+      historyData: historyStore.data
     })
     paginationDataGD.total = data.total
     guideData.value = data.list
@@ -87,6 +103,11 @@ watch(() => favoriteStore.list, () => {
 watch(() => usePriceStore(), () => {
   getGuideData()
 }, { deep: true })
+
+// 历史数据就绪/更新后重算（防抖：抓取逐条推进时避免高频全表重算）
+watch(() => historyStore.version, debounce(() => {
+  getGuideData()
+}, 500))
 // #endregion
 
 // #region 收藏
@@ -151,6 +172,14 @@ function formatVolume1h(row: GuideItem) {
       <el-checkbox v-model="includeTax" @change="handleSearchGD">
         {{ t('计算税率') }}
       </el-checkbox>
+      <div v-if="historyStore.progress" class="history-progress">
+        <el-progress
+          :percentage="Math.round(historyStore.progress.done / historyStore.progress.total * 100)"
+          :stroke-width="6"
+          style="width: 160px;"
+        />
+        <span class="history-progress-text">{{ t('历史数据') }} {{ historyStore.progress.done }}/{{ historyStore.progress.total }}</span>
+      </div>
     </div>
     <el-card>
       <template #header>
@@ -217,7 +246,13 @@ function formatVolume1h(row: GuideItem) {
           </el-table-column>
           <el-table-column :label="t('物品')">
             <template #default="{ row }">
-              {{ row.name }}<span v-if="row.level"> +{{ row.level }}</span>
+              <div>{{ row.name }}<span v-if="row.level"> +{{ row.level }}</span></div>
+              <div v-if="formatDeviation(row.priceDeviation, row)" class="history-deviation">
+                {{ formatDeviation(row.priceDeviation, row) }}
+              </div>
+              <div v-else-if="!row.hasHistory" class="history-deviation">
+                {{ t('无历史') }}
+              </div>
             </template>
           </el-table-column>
           <el-table-column prop="profitPD" :label="t('利润 / 天')" align="center" min-width="120" sortable="custom" :sort-orders="['descending', 'ascending']">
@@ -301,5 +336,19 @@ function formatVolume1h(row: GuideItem) {
 }
 .manual {
   color: #409eff;
+}
+.history-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  .history-progress-text {
+    font-size: 12px;
+    color: #909399;
+    white-space: nowrap;
+  }
+}
+.history-deviation {
+  font-size: 12px;
+  color: #909399;
 }
 </style>

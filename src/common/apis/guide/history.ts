@@ -50,6 +50,9 @@ export interface GuideHistoryStats {
   }
 }
 
+/** 历史条目三态：统计值 / 无有效记录(null，三级兜底视同无历史) / 抓取失败 */
+export type GuideHistoryEntry = GuideHistoryStats | "failed" | null
+
 /** 把历史统计收窄为 calc 层需要的三级兜底数据（字段名映射集中于此） */
 export function toGuideHistoryData(stats: GuideHistoryStats): GuideHistoryData {
   return {
