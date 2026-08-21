@@ -10,7 +10,7 @@ import { type GuideHistoryEntry, historyKeyOf, toGuideHistoryData } from "./hist
 export interface GuideApiParams extends GuideRequestData {
   /**
    * 历史行情数据（key = {hrid}|{level}），可选。
-   * 值三态：GuideHistoryStats 统计值（参与三级兜底）/ null 无有效记录（视同无历史）/ "failed" 抓取失败（回落快照）。
+   * 值两态：GuideHistoryStats 统计值（参与三级兜底）/ null 无有效记录（视同无历史）。
    */
   historyData?: Map<string, GuideHistoryEntry>
 }
@@ -27,7 +27,7 @@ export function getGuideDataApi(params: GuideApiParams) {
 
   const historyGetter = (hrid: string, level: number) => {
     const stats = params.historyData?.get(historyKeyOf(hrid, level))
-    if (!stats || stats === "failed") return null
+    if (!stats) return null
     return toGuideHistoryData(stats)
   }
 

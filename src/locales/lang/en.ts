@@ -132,7 +132,6 @@ export default {
   "最低/最高": "Min/Max",
   "无交易记录": "No Records",
   "当前快照": "Current Snapshot",
-  "历史数据加载失败": "History Load Failed",
   "历史数据服务暂不可用，已使用快照数据": "History service unavailable, using snapshot data",
   "加载中...": "Loading...",
 

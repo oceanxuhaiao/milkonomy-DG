@@ -21,7 +21,7 @@ interface HistoryFileCache {
 
 export const useGuideHistoryStore = defineStore("guideHistory", {
   state: () => ({
-    /** key = {hrid}|{level}，三态：统计值 / null(无有效记录) / "failed" */
+    /** key = {hrid}|{level}，两态：统计值 / null(无有效记录) */
     data: new Map<string, GuideHistoryEntry>(),
     progress: null as { done: number, total: number } | null,
     ready: false,

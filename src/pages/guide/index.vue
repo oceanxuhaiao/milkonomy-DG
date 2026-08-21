@@ -104,7 +104,7 @@ watch(() => usePriceStore(), () => {
   getGuideData()
 }, { deep: true })
 
-// 历史数据就绪/更新后重算（防抖：抓取逐条推进时避免高频全表重算）
+// 历史数据就绪/更新后重算（防抖：分发逐条写入时避免高频全表重算）
 watch(() => historyStore.version, debounce(() => {
   getGuideData()
 }, 500))

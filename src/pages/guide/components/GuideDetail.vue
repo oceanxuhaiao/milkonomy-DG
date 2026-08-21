@@ -25,24 +25,33 @@ function fmt(value: number | null | undefined) {
 
 const historyStore = useGuideHistoryStore()
 
-const historyState = ref<"loading" | "ready" | "none" | "failed">("loading")
+const historyState = ref<"loading" | "ready" | "none">("loading")
 const historyStats = ref<GuideHistoryStats | null>(null)
 
-watch(() => props.data, (row) => {
-  historyState.value = "loading"
-  historyStats.value = null
-  if (!row) return
-  // 全量文件模式：store.data 已含全部组合；缺失即无交易记录
+function readHistory(row: GuideItem) {
   const cached = historyStore.data.get(historyKeyOf(row.hrid, row.level))
-  if (cached === null || cached === undefined) {
+  if (cached === null) {
     historyState.value = "none"
-  } else if (cached === "failed") {
-    historyState.value = "failed"
+  } else if (cached === undefined && !historyStore.ready) {
+    historyState.value = "loading" // 历史数据尚未加载完成
+  } else if (cached === undefined) {
+    historyState.value = "none" // 全量文件已就绪但无该组合 → 无交易记录
   } else {
     historyStats.value = cached
     historyState.value = "ready"
   }
+}
+
+watch(() => props.data, (row) => {
+  historyStats.value = null
+  if (!row) return
+  readHistory(row)
 }, { immediate: true })
+
+watch(() => historyStore.version, () => {
+  const row = props.data
+  if (row) readHistory(row)
+})
 
 const WINDOW_KEYS = ["1d", "3d", "5d"] as const
 
@@ -113,9 +122,6 @@ const historyRows = computed(() => {
       </div>
       <div v-else-if="historyState === 'none'" style="color:#909399;font-size:12px">
         {{ t('无交易记录') }}
-      </div>
-      <div v-else-if="historyState === 'failed'" style="color:#909399;font-size:12px">
-        {{ t('历史数据加载失败') }}
       </div>
       <el-table v-else-if="historyState === 'ready'" :data="historyRows" size="small" border>
         <el-table-column prop="label" :label="t('窗口')" width="60" />

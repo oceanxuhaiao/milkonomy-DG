@@ -1,5 +1,5 @@
 import { buildGuideRows, resolveGuidePrice } from "@@/apis/guide/calc"
-import { calcHistoryStats, fetchHistoryFile, getPriceTier, parseHistoryFile, toGuideHistoryData } from "@@/apis/guide/history"
+import { calcHistoryStats, fetchHistoryFile, getPriceTier, historyKeyOf, parseHistoryFile, toGuideHistoryData } from "@@/apis/guide/history"
 import { createPinia, setActivePinia } from "pinia"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { useGuideHistoryStore } from "@/pinia/stores/guide-history"
@@ -387,5 +387,12 @@ describe("fetchHistoryFile", () => {
   it("json 解析失败抛错", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("not-json{", { status: 200 })))
     await expect(fetchHistoryFile()).rejects.toThrow()
+  })
+})
+
+describe("historyKeyOf", () => {
+  it("key 由 hrid|level 组成", () => {
+    expect(historyKeyOf("/items/apple", 0)).toBe("/items/apple|0")
+    expect(historyKeyOf("/items/sword", 13)).toBe("/items/sword|13")
   })
 })

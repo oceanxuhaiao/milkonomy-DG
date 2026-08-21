@@ -25,7 +25,7 @@ export function isEquipmentItem(item: { categoryHrid?: string }) {
 }
 
 /** 物品的导购行等级列表：普通物品 [0]，装备 [0, ...GUIDE_ENHANCE_LEVELS] */
-export function guideLevelsOf(item: { categoryHrid?: string }): number[] {
+function guideLevelsOf(item: { categoryHrid?: string }): number[] {
   return isEquipmentItem(item) ? [0, ...GUIDE_ENHANCE_LEVELS] : [0]
 }
 
