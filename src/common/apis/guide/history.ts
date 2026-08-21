@@ -1,3 +1,5 @@
+import { GUIDE_ENHANCE_LEVELS, isEquipmentItem } from "./calc"
+
 /** 历史行情 API 地址（未来切换自建数据源只改此处） */
 export const HISTORY_API_URL = "https://q7.nainai.eu.org/api/market/history"
 
@@ -233,4 +235,112 @@ export function calcHistoryStats(points: HistoryPoint[], nowSec: number = Math.f
   }
 
   return { medianBuy1d, medianSell1d, avgVol5d, report }
+}
+
+export function historyKeyOf(hrid: string, level: number) {
+  return `${hrid}|${level}`
+}
+
+export interface HistoryTask {
+  hrid: string
+  level: number
+}
+
+/** 生成抓取任务清单：与 buildGuideRows 行生成一致（物品 0 级 + 装备强化等级） */
+export function buildHistoryTasks(items: { hrid: string, categoryHrid?: string }[]): HistoryTask[] {
+  const tasks: HistoryTask[] = []
+  for (const item of items) {
+    const levels = isEquipmentItem(item) ? [0, ...GUIDE_ENHANCE_LEVELS] : [0]
+    for (const level of levels) {
+      tasks.push({ hrid: item.hrid, level })
+    }
+  }
+  return tasks
+}
+
+/**
+ * 抓取单个物品+等级的历史数据（days=5 覆盖 1d/3d/5d）。
+ * 5 秒超时，失败重试 1 次，仍失败抛错。
+ */
+export async function fetchHistoryPoints(hrid: string, level: number): Promise<HistoryPoint[]> {
+  const url = `${HISTORY_API_URL}?item_id=${hrid}&variant=${level}&days=5`
+  let lastError: unknown = null
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5000)
+    try {
+      const res = await fetch(url, { signal: controller.signal })
+      if (!res.ok) throw new Error(`历史数据请求失败: ${res.status}`)
+      const data = await res.json()
+      if (!Array.isArray(data)) throw new Error("历史数据格式错误")
+      return data as HistoryPoint[]
+    } catch (e) {
+      lastError = e
+    } finally {
+      clearTimeout(timeoutId)
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("历史数据请求失败")
+}
+
+export interface RunHistoryFetchOptions {
+  /** 每个请求之间的限速间隔（毫秒），默认 100 */
+  gapMs?: number
+  /** 连续失败中止阈值，默认 50 */
+  failLimit?: number
+  onAbort?: () => void
+}
+
+/**
+ * 限速并发抓取队列。
+ * @param tasks 任务清单
+ * @param onItem 每条结果回调（"failed" 表示请求失败，[] 表示无交易记录）
+ * @param onProgress 进度回调
+ */
+export async function runHistoryFetch(
+  tasks: HistoryTask[],
+  onItem: (key: string, result: HistoryPoint[] | "failed") => void | Promise<void>,
+  onProgress?: (done: number, total: number) => void,
+  options: RunHistoryFetchOptions = {}
+) {
+  const gapMs = options.gapMs ?? HISTORY_REQUEST_GAP_MS
+  const failLimit = options.failLimit ?? HISTORY_FAIL_LIMIT
+  const total = tasks.length
+  const queue = [...tasks]
+  let completed = 0
+  let consecutiveFailures = 0
+  let aborted = false
+
+  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+  async function worker() {
+    while (queue.length > 0 && !aborted) {
+      const task = queue.shift()!
+      const key = historyKeyOf(task.hrid, task.level)
+      let result: HistoryPoint[] | "failed"
+      try {
+        result = await fetchHistoryPoints(task.hrid, task.level)
+      } catch {
+        result = "failed"
+      }
+
+      if (result === "failed") {
+        consecutiveFailures++
+        if (consecutiveFailures >= failLimit) {
+          aborted = true
+          options.onAbort?.()
+        }
+      } else {
+        consecutiveFailures = 0
+      }
+
+      await onItem(key, result)
+      completed++
+      onProgress?.(completed, total)
+
+      await sleep(gapMs)
+    }
+  }
+
+  await Promise.all(Array.from({ length: HISTORY_CONCURRENCY }, () => worker()))
 }

@@ -1,5 +1,11 @@
-import { calcHistoryStats, getPriceTier } from "@@/apis/guide/history"
-import { describe, expect, it } from "vitest"
+import { GUIDE_ENHANCE_LEVELS } from "@@/apis/guide/calc"
+import { buildHistoryTasks, calcHistoryStats, fetchHistoryPoints, getPriceTier, HISTORY_API_URL, historyKeyOf, runHistoryFetch } from "@@/apis/guide/history"
+import { afterEach, describe, expect, it, vi } from "vitest"
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
 
 // 固定"现在"：2026-08-21 12:00:00 UTC = 1787266800 秒
 const NOW = 1787266800
@@ -119,5 +125,93 @@ describe("getPriceTier", () => {
     expect(getPriceTier(-5, "up")).toBe(0)
     // trunc 后 <=1 返回 2
     expect(getPriceTier(1, "down")).toBe(2)
+  })
+})
+
+describe("historyKeyOf / buildHistoryTasks", () => {
+  it("key 由 hrid|level 组成", () => {
+    expect(historyKeyOf("/items/apple", 0)).toBe("/items/apple|0")
+    expect(historyKeyOf("/items/sword", 13)).toBe("/items/sword|13")
+  })
+
+  it("普通物品只有0级任务；装备含0级+全部强化等级", () => {
+    const items: any[] = [
+      { hrid: "/items/apple", categoryHrid: "/item_categories/food" },
+      { hrid: "/items/sword", categoryHrid: "/item_categories/equipment" }
+    ]
+    const tasks = buildHistoryTasks(items)
+    expect(tasks.map(t => t.level)).toEqual([0, 0, ...GUIDE_ENHANCE_LEVELS])
+    expect(tasks.length).toBe(2 + GUIDE_ENHANCE_LEVELS.length)
+  })
+})
+
+describe("fetchHistoryPoints", () => {
+  it("成功返回数据数组", async () => {
+    const payload = [{ time: 1787266800, a: 13, b: 12, p: 12, v: 100 }]
+    const fetchMock = vi.fn(async (_url: string) => new Response(JSON.stringify(payload), { status: 200 }))
+    vi.stubGlobal("fetch", fetchMock)
+    const result = await fetchHistoryPoints("/items/sugar", 0)
+    expect(result).toEqual(payload)
+    expect(fetchMock.mock.calls[0][0]).toBe(`${HISTORY_API_URL}?item_id=/items/sugar&variant=0&days=5`)
+  })
+
+  it("失败重试1次后仍失败则抛错", async () => {
+    const fetchMock = vi.fn(async () => new Response("err", { status: 500 }))
+    vi.stubGlobal("fetch", fetchMock)
+    await expect(fetchHistoryPoints("/items/sugar", 0)).rejects.toThrow()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it("返回非数组时抛错", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ bad: true }), { status: 200 })))
+    await expect(fetchHistoryPoints("/items/sugar", 0)).rejects.toThrow()
+  })
+})
+
+describe("runHistoryFetch", () => {
+  it("并发抓取并回调进度与结果；空数组合法", async () => {
+    const responses: Record<string, any[]> = {
+      "/items/a|0": [{ time: 1, a: 1, b: 1, p: 1, v: 1 }],
+      "/items/b|0": [],
+      "/items/c|0": [{ time: 2, a: 2, b: 2, p: 2, v: 2 }]
+    }
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      const hrid = decodeURIComponent(String(url).split("item_id=")[1].split("&")[0])
+      const level = String(url).split("variant=")[1].split("&")[0]
+      return new Response(JSON.stringify(responses[`${hrid}|${level}`] ?? []), { status: 200 })
+    }))
+
+    const items = new Map<string, any[] | "failed">()
+    const progress: number[] = []
+    await runHistoryFetch(
+      [
+        { hrid: "/items/a", level: 0 },
+        { hrid: "/items/b", level: 0 },
+        { hrid: "/items/c", level: 0 }
+      ],
+      (key, result) => {
+        items.set(key, result)
+      },
+      (done, _total) => progress.push(done),
+      { gapMs: 0 }
+    )
+    expect(items.get("/items/a|0")).toEqual(responses["/items/a|0"])
+    expect(items.get("/items/b|0")).toEqual([])
+    expect(items.size).toBe(3)
+    expect(progress[progress.length - 1]).toBe(3)
+  })
+
+  it("连续失败达到上限时中止本轮", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("err", { status: 500 })))
+    let aborted = false
+    await runHistoryFetch(
+      Array.from({ length: 5 }, (_, i) => ({ hrid: `/items/x${i}`, level: 0 })),
+      () => undefined,
+      undefined,
+      { gapMs: 0, failLimit: 3, onAbort: () => {
+        aborted = true
+      } }
+    )
+    expect(aborted).toBe(true)
   })
 })
