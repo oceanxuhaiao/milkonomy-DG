@@ -1,95 +1,66 @@
 import { defineStore } from "pinia"
 import {
-  buildHistoryTasks,
+  type CachedHistory,
   calcHistoryStats,
+  fetchHistoryFile,
   type GuideHistoryEntry,
   HISTORY_CACHE_TTL,
   type HistoryCache,
-  historyKeyOf,
-  type HistoryTask,
-  indexedDbHistoryCache,
-  runHistoryFetch,
-  type RunHistoryFetchOptions
+  type HistoryPoint,
+  indexedDbHistoryCache
 } from "@/common/apis/guide/history"
 import { pinia } from "@/pinia"
-import { useGameStoreOutside } from "./game"
+
+const CACHE_KEY = "__history_file__"
+
+/** 整文件缓存条目：数据与时间戳合一（IndexedDB kv 无法枚举，单条目存全部） */
+interface HistoryFileCache {
+  fetchedAt: number
+  history: Record<string, HistoryPoint[]>
+}
 
 export const useGuideHistoryStore = defineStore("guideHistory", {
   state: () => ({
-    /** key = {hrid}|{level}，值三态：统计值 / 无有效记录 null / 抓取失败 "failed" */
+    /** key = {hrid}|{level}，三态：统计值 / null(无有效记录) / "failed" */
     data: new Map<string, GuideHistoryEntry>(),
     progress: null as { done: number, total: number } | null,
     ready: false,
-    /** 数据版本号：每次抓取完成一条 +1，页面 watch 此值触发重算 */
+    /** 数据版本号：分发完成 +1，页面 watch 此值触发重算 */
     version: 0
   }),
   actions: {
     /**
-     * 进入页面时调用：读缓存 → 缺失/过期条目抓取。
-     * items/cache/opts 可注入（测试用）；默认走游戏数据与 IndexedDB。
+     * 进入页面时调用：优先读 12h 内的整文件缓存，否则下载自建历史文件；
+     * 数据到位后逐 key 计算统计进 data。
+     * cache 可注入（测试用）；默认走 IndexedDB。
      */
-    async ensureLoaded(
-      items?: { hrid: string, categoryHrid?: string }[],
-      cache: HistoryCache = indexedDbHistoryCache,
-      opts: RunHistoryFetchOptions = {}
-    ) {
-      // 抓取进行中防重入；完成后 progress=null，再次调用可增量刷新
+    async ensureLoaded(cache: HistoryCache = indexedDbHistoryCache) {
       if (this.progress) return
-      const itemList = items ?? Object.values(useGameStoreOutside().gameData?.itemDetailMap ?? {})
-      if (itemList.length === 0) return
-
-      const tasks = buildHistoryTasks(itemList)
-      const pending: HistoryTask[] = []
-
       try {
-        // 占位进度：防背靠背调用穿透守卫（第二次调用同步段先于首次 await 恢复）
-        this.progress = { done: 0, total: tasks.length }
-
-        // 读缓存：未过期直接进 data，过期/缺失入队
-        for (const task of tasks) {
-          const key = historyKeyOf(task.hrid, task.level)
-          const cached = await cache.get(key)
-          if (cached && Date.now() - cached.fetchedAt < HISTORY_CACHE_TTL) {
-            this.data.set(key, calcHistoryStats(cached.points))
-          } else {
-            pending.push(task)
-          }
+        let file: HistoryFileCache | null = null
+        const cached = await cache.get(CACHE_KEY) as HistoryFileCache | null
+        if (cached && Date.now() - cached.fetchedAt < HISTORY_CACHE_TTL) {
+          file = cached
+        } else {
+          const map = await fetchHistoryFile()
+          const history: Record<string, HistoryPoint[]> = {}
+          for (const [key, points] of map) history[key] = points
+          file = { fetchedAt: Date.now(), history }
+          // HistoryCache.set 形参是旧 CachedHistory 形状；本缓存条目的运行时值即 HistoryFileCache
+          await cache.set(CACHE_KEY, file as unknown as CachedHistory)
         }
 
-        if (pending.length === 0) {
-          this.progress = null
-          this.ready = true
+        const keys = Object.keys(file.history)
+        this.progress = { done: 0, total: keys.length }
+        for (const key of keys) {
+          this.data.set(key, calcHistoryStats(file.history[key]))
+          this.progress = { done: this.progress.done + 1, total: keys.length }
           this.version++
-          return
         }
-
-        this.progress = { done: 0, total: pending.length }
-        await runHistoryFetch(
-          pending,
-          async (key, result) => {
-            if (result === "failed") {
-              this.data.set(key, "failed")
-            } else {
-              const stats = calcHistoryStats(result)
-              try {
-                await cache.set(key, { points: result, fetchedAt: Date.now() })
-              } catch (e) {
-                console.error("历史数据缓存写入失败:", e)
-              }
-              this.data.set(key, stats)
-            }
-            this.version++
-          },
-          (done, total) => {
-            this.progress = { done, total }
-          },
-          opts
-        )
         this.progress = null
         this.ready = true
         this.version++
       } catch (e) {
-        // 缓存读取异常：恢复 progress 允许下次重试，历史数据失败不影响页面
         console.error("历史数据加载失败:", e)
         this.progress = null
       }

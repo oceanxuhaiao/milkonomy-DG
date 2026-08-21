@@ -1,5 +1,5 @@
 import { buildGuideRows, GUIDE_ENHANCE_LEVELS, resolveGuidePrice } from "@@/apis/guide/calc"
-import { buildHistoryTasks, type CachedHistory, calcHistoryStats, fetchHistoryFile, fetchHistoryPoints, getPriceTier, HISTORY_API_URL, HISTORY_CACHE_TTL, historyKeyOf, parseHistoryFile, runHistoryFetch, toGuideHistoryData } from "@@/apis/guide/history"
+import { buildHistoryTasks, calcHistoryStats, fetchHistoryFile, fetchHistoryPoints, getPriceTier, HISTORY_API_URL, historyKeyOf, parseHistoryFile, runHistoryFetch, toGuideHistoryData } from "@@/apis/guide/history"
 import { createPinia, setActivePinia } from "pinia"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { useGuideHistoryStore } from "@/pinia/stores/guide-history"
@@ -239,113 +239,64 @@ describe("guide-history store", () => {
     return Object.assign(store, overrides)
   }
 
-  it("ensureLoaded：缓存未过期直接用，缺失/过期条目抓取", async () => {
-    const now = Date.now()
-    // 数据点时间取 1 小时前，保证落在 calcHistoryStats 的 5d 统计窗口内
-    const t = Math.floor(now / 1000) - 3600
-    const cache = {
-      get: vi.fn(async (key: string): Promise<CachedHistory | null> => key === "/items/fresh|0"
-        ? { points: [{ time: t, a: 2, b: 1, p: 1.5, v: 3 }], fetchedAt: now - 1000 }
-        : key === "/items/stale|0"
-          ? { points: [{ time: t, a: 2, b: 1, p: 1.5, v: 3 }], fetchedAt: now - HISTORY_CACHE_TTL - 1 }
-          : null),
-      set: vi.fn(async () => undefined)
-    }
-    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
-      const hrid = decodeURIComponent(String(url).split("item_id=")[1].split("&")[0])
-      const level = String(url).split("variant=")[1].split("&")[0]
-      return new Response(JSON.stringify(hrid === "/items/missing" && level === "0"
-        ? [{ time: t, a: 5, b: 4, p: 4.5, v: 6 }]
-        : []), { status: 200 })
-    }))
+  const filePoints = {
+    "/items/a|0": [{ t: Math.floor(Date.now() / 1000) - 3600, a: 5, b: 4, p: 4.5, v: 6 }],
+    "/items/b|0": [{ t: Math.floor(Date.now() / 1000) - 3600, a: 50, b: 40, p: 45, v: 60 }]
+  }
 
-    const items: any[] = [
-      { hrid: "/items/fresh", categoryHrid: "/item_categories/food" },
-      { hrid: "/items/stale", categoryHrid: "/item_categories/food" },
-      { hrid: "/items/missing", categoryHrid: "/item_categories/food" }
-    ]
+  /** 与 filePoints 同数据、解析后形状（time 字段）——模拟 store 写入的整文件缓存条目 */
+  const parsedPoints = {
+    "/items/a|0": [{ time: Math.floor(Date.now() / 1000) - 3600, a: 5, b: 4, p: 4.5, v: 6 }],
+    "/items/b|0": [{ time: Math.floor(Date.now() / 1000) - 3600, a: 50, b: 40, p: 45, v: 60 }]
+  }
 
+  function stubFileResponse(points = filePoints) {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(JSON.stringify({ updatedAt: 1, history: points }), { status: 200 })))
+  }
+
+  it("无缓存时下载文件、写整文件缓存并分发统计", async () => {
+    const cache = { get: vi.fn(async () => null), set: vi.fn(async () => undefined) }
+    stubFileResponse()
     const store = makeStore()
-    await store.ensureLoaded(items, cache as any, { gapMs: 0 })
+    await store.ensureLoaded(cache as any)
     expect(store.ready).toBe(true)
     expect(store.progress).toBeNull()
-    // fresh 走缓存
-    expect(store.data.get("/items/fresh|0")).toBeTruthy()
-    expect(cache.get).toHaveBeenCalledWith("/items/fresh|0")
-    // stale 与 missing 被抓取并写缓存
-    expect(cache.set).toHaveBeenCalledWith("/items/stale|0", expect.objectContaining({ points: expect.any(Array) }))
-    expect(cache.set).toHaveBeenCalledWith("/items/missing|0", expect.objectContaining({ points: expect.any(Array) }))
-    // 抓取到的数据进 store
-    const missing = store.data.get("/items/missing|0") as any
-    expect(missing.medianBuy1d).toBe(4)
-    expect(missing.medianSell1d).toBe(5)
+    const a = store.data.get("/items/a|0") as any
+    expect(a.medianBuy1d).toBe(4)
+    expect(a.medianSell1d).toBe(5)
+    expect(store.data.get("/items/b|0")).toBeTruthy()
+    // 整文件单条目缓存写入
+    expect(cache.set).toHaveBeenCalledWith("__history_file__", expect.objectContaining({ fetchedAt: expect.any(Number), history: expect.any(Object) }))
   })
 
-  it("请求失败标记 failed，不影响 ready", async () => {
-    const cache = { get: vi.fn(async () => null), set: vi.fn(async () => undefined) }
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("err", { status: 500 })))
-
-    const items: any[] = [{ hrid: "/items/a", categoryHrid: "/item_categories/food" }]
-    const store = makeStore()
-    await store.ensureLoaded(items, cache as any, { gapMs: 0, failLimit: 10 })
-    expect(store.ready).toBe(true)
-    expect(store.data.get("/items/a|0")).toBe("failed")
-  })
-
-  it("抓取中重复调用 ensureLoaded 不重复抓取", async () => {
-    let resolveFetch!: (r: Response) => void
-    const gate = new Promise<Response>((r) => {
-      resolveFetch = r
-    })
-    const fetchMock = vi.fn(async () => gate)
-    vi.stubGlobal("fetch", fetchMock)
-    const cache = { get: vi.fn(async () => null), set: vi.fn(async () => undefined) }
-    const items: any[] = [{ hrid: "/items/a", categoryHrid: "/item_categories/food" }]
-    const store = makeStore()
-    const p1 = store.ensureLoaded(items, cache as any, { gapMs: 0 })
-    const p2 = store.ensureLoaded(items, cache as any, { gapMs: 0 })
-    await Promise.resolve()
-    resolveFetch(new Response(JSON.stringify([]), { status: 200 }))
-    await Promise.all([p1, p2])
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(store.ready).toBe(true)
-  })
-
-  it("缓存读取抛错时恢复 progress 且 ready 保持 false（可重试）", async () => {
+  it("整文件缓存 12h 内命中时跳过下载直接分发", async () => {
     const cache = {
-      get: vi.fn(async () => {
-        throw new Error("db fail")
+      get: vi.fn(async (key: string) => {
+        if (key === "__history_file__") {
+          return { fetchedAt: Date.now() - 1000, history: parsedPoints }
+        }
+        return null
       }),
       set: vi.fn(async () => undefined)
     }
-    const items: any[] = [{ hrid: "/items/a", categoryHrid: "/item_categories/food" }]
+    // stub 为 mock，才能断言"未发生下载"
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 200 })))
     const store = makeStore()
-    await store.ensureLoaded(items, cache as any, { gapMs: 0 })
-    expect(store.progress).toBeNull()
-    expect(store.ready).toBe(false)
-    // 可重试：第二次调用不再抛错
-    const cache2 = {
-      get: vi.fn(async () => null),
-      set: vi.fn(async () => undefined)
-    }
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([]), { status: 200 })))
-    await store.ensureLoaded(items, cache2 as any, { gapMs: 0 })
+    await store.ensureLoaded(cache as any)
     expect(store.ready).toBe(true)
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled()
+    const a = store.data.get("/items/a|0") as any
+    expect(a.medianBuy1d).toBe(4)
   })
 
-  it("缓存写入抛错时单条兜底仍写入 data", async () => {
-    const cache = {
-      get: vi.fn(async () => null),
-      set: vi.fn(async () => {
-        throw new Error("db fail")
-      })
-    }
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([{ time: Math.floor(Date.now() / 1000) - 3600, a: 5, b: 4, p: 4.5, v: 6 }]), { status: 200 })))
-    const items: any[] = [{ hrid: "/items/a", categoryHrid: "/item_categories/food" }]
+  it("下载失败时 ready 保持 false 且 progress 复位", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("err", { status: 500 })))
+    const cache = { get: vi.fn(async () => null), set: vi.fn(async () => undefined) }
     const store = makeStore()
-    await store.ensureLoaded(items, cache as any, { gapMs: 0 })
-    expect(store.ready).toBe(true)
-    expect(store.data.get("/items/a|0")).toBeTruthy()
+    await store.ensureLoaded(cache as any)
+    expect(store.ready).toBe(false)
+    expect(store.progress).toBeNull()
   })
 })
 
