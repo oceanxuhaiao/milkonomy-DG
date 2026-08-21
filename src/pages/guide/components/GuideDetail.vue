@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { GuideHistoryStats, WindowReport } from "@@/apis/guide/history"
 import type { GuideItem } from "@@/apis/guide/type"
-import { calcHistoryStats, fetchHistoryPoints } from "@@/apis/guide/history"
+import { calcHistoryStats, fetchHistoryPoints, historyKeyOf } from "@@/apis/guide/history"
 import ItemIcon from "@@/components/ItemIcon/index.vue"
 import * as Format from "@/common/utils/format"
 import { useGuideHistoryStore } from "@/pinia/stores/guide-history"
@@ -28,27 +28,31 @@ const historyStore = useGuideHistoryStore()
 const historyState = ref<"loading" | "ready" | "none" | "failed">("loading")
 const historyStats = ref<GuideHistoryStats | null>(null)
 
-let currentKey = ""
+let reqSeq = 0
 watch(() => props.data, async (row) => {
   historyState.value = "loading"
   historyStats.value = null
   if (!row) return
-  currentKey = `${row.hrid}|${row.level}`
-  const key = currentKey
+  const key = historyKeyOf(row.hrid, row.level)
+  const seq = ++reqSeq
+  // store 三态：有统计值 → ready；null（无有效记录）→ none；"failed" → failed；undefined（未抓取）→ 按需单查
   const cached = historyStore.data.get(key)
-  if (cached && cached !== "failed") {
-    historyStats.value = cached
-    historyState.value = "ready"
-    return
-  }
-  if (cached === "failed") {
-    historyState.value = "failed"
+  if (cached !== undefined) {
+    if (cached === null) {
+      historyState.value = "none"
+    } else if (cached === "failed") {
+      historyState.value = "failed"
+    } else {
+      historyStats.value = cached
+      historyState.value = "ready"
+    }
     return
   }
   try {
     const points = await fetchHistoryPoints(row.hrid, row.level)
-    if (currentKey !== key) return // 已切换物品，丢弃过期结果
+    if (seq !== reqSeq) return // 已切换物品，丢弃过期结果
     const stats = calcHistoryStats(points)
+    historyStore.data.set(key, stats) // 回写 store，避免重复请求
     if (stats) {
       historyStats.value = stats
       historyState.value = "ready"
@@ -56,7 +60,8 @@ watch(() => props.data, async (row) => {
       historyState.value = "none"
     }
   } catch {
-    if (currentKey !== key) return
+    if (seq !== reqSeq) return
+    historyStore.data.set(key, "failed") // 仅内存标记；刷新后 ensureLoaded 会重新抓取
     historyState.value = "failed"
   }
 }, { immediate: true })
@@ -134,7 +139,7 @@ const historyRows = computed(() => {
       <div v-else-if="historyState === 'failed'" style="color:#909399;font-size:12px">
         {{ t('历史数据加载失败') }}
       </div>
-      <el-table v-else :data="historyRows" size="small" border>
+      <el-table v-else-if="historyState === 'ready'" :data="historyRows" size="small" border>
         <el-table-column prop="label" :label="t('窗口')" width="60" />
         <el-table-column prop="avgPrice" :label="t('均价')" align="center" />
         <el-table-column prop="medianPrice" :label="t('中位价')" align="center" />
