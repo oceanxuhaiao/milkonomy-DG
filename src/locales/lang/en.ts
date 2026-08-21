@@ -121,6 +121,21 @@ export default {
   "计算税率": "Include Tax",
 
   "导购工具": "Guide Tool",
+
+  "历史数据": "History",
+  "历史行情": "Market History",
+  "无历史": "No History",
+  "中位价": "Median",
+  "买盘": "Buy Vol",
+  "卖盘": "Sell Vol",
+  "窗口": "Window",
+  "最低/最高": "Min/Max",
+  "无交易记录": "No Records",
+  "当前快照": "Current Snapshot",
+  "历史数据加载失败": "History Load Failed",
+  "历史数据服务暂不可用，已使用快照数据": "History service unavailable, using snapshot data",
+  "加载中...": "Loading...",
+
   "工时费/h": "Hourly Rate",
   "工时费": "Hourly Rate",
   "溢价率%": "% Rate",
