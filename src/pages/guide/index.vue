@@ -23,6 +23,11 @@ const historyStore = useGuideHistoryStore()
 // 进入页面自动增量抓取历史数据
 historyStore.ensureLoaded()
 
+// 游戏数据就绪后再尝试加载历史（幂等：progress 守卫 + 缓存 TTL 保证重复调用无害）
+watch(() => useGameStore().gameData, () => {
+  historyStore.ensureLoaded()
+})
+
 function formatDeviation(dev: { buy: number | null, sell: number | null } | null, row: GuideItem) {
   if (!row.hasHistory) return null
   if (!dev) return null

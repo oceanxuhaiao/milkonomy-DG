@@ -310,6 +310,43 @@ describe("guide-history store", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(store.ready).toBe(true)
   })
+
+  it("缓存读取抛错时恢复 progress 且 ready 保持 false（可重试）", async () => {
+    const cache = {
+      get: vi.fn(async () => {
+        throw new Error("db fail")
+      }),
+      set: vi.fn(async () => undefined)
+    }
+    const items: any[] = [{ hrid: "/items/a", categoryHrid: "/item_categories/food" }]
+    const store = makeStore()
+    await store.ensureLoaded(items, cache as any, { gapMs: 0 })
+    expect(store.progress).toBeNull()
+    expect(store.ready).toBe(false)
+    // 可重试：第二次调用不再抛错
+    const cache2 = {
+      get: vi.fn(async () => null),
+      set: vi.fn(async () => undefined)
+    }
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([]), { status: 200 })))
+    await store.ensureLoaded(items, cache2 as any, { gapMs: 0 })
+    expect(store.ready).toBe(true)
+  })
+
+  it("缓存写入抛错时单条兜底仍写入 data", async () => {
+    const cache = {
+      get: vi.fn(async () => null),
+      set: vi.fn(async () => {
+        throw new Error("db fail")
+      })
+    }
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([{ time: Math.floor(Date.now() / 1000) - 3600, a: 5, b: 4, p: 4.5, v: 6 }]), { status: 200 })))
+    const items: any[] = [{ hrid: "/items/a", categoryHrid: "/item_categories/food" }]
+    const store = makeStore()
+    await store.ensureLoaded(items, cache as any, { gapMs: 0 })
+    expect(store.ready).toBe(true)
+    expect(store.data.get("/items/a|0")).toBeTruthy()
+  })
 })
 
 describe("resolveGuidePrice 三级兜底", () => {
