@@ -7,9 +7,13 @@ export const HISTORY_API_URL = "https://q7.nainai.eu.org/api/market/history"
 /** 缓存过期时间：12 小时（保守频率，减轻第三方服务器负担） */
 export const HISTORY_CACHE_TTL = 12 * 60 * 60 * 1000
 
-/** 抓取并发数与请求间隔（限速） */
-export const HISTORY_CONCURRENCY = 10
-export const HISTORY_REQUEST_GAP_MS = 100
+/**
+ * 抓取并发数与请求间隔（限速）。
+ * 实测：10 并发 + 100ms 间隔（峰值 ~100 req/s）会触发 q7 的防护导致 CORS 拦截，
+ * 降为 5 并发 + 250ms 间隔（峰值 ~20 req/s）后正常。
+ */
+export const HISTORY_CONCURRENCY = 5
+export const HISTORY_REQUEST_GAP_MS = 250
 /** 连续失败阈值：达到即判定服务不可用并中止本轮 */
 export const HISTORY_FAIL_LIMIT = 50
 
