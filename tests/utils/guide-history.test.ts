@@ -1,5 +1,5 @@
 import { buildGuideRows, GUIDE_ENHANCE_LEVELS, resolveGuidePrice } from "@@/apis/guide/calc"
-import { buildHistoryTasks, type CachedHistory, calcHistoryStats, fetchHistoryPoints, getPriceTier, HISTORY_API_URL, HISTORY_CACHE_TTL, historyKeyOf, runHistoryFetch } from "@@/apis/guide/history"
+import { buildHistoryTasks, type CachedHistory, calcHistoryStats, fetchHistoryPoints, getPriceTier, HISTORY_API_URL, HISTORY_CACHE_TTL, historyKeyOf, runHistoryFetch, toGuideHistoryData } from "@@/apis/guide/history"
 import { createPinia, setActivePinia } from "pinia"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { useGuideHistoryStore } from "@/pinia/stores/guide-history"
@@ -144,6 +144,13 @@ describe("historyKeyOf / buildHistoryTasks", () => {
     const tasks = buildHistoryTasks(items)
     expect(tasks.map(t => t.level)).toEqual([0, 0, ...GUIDE_ENHANCE_LEVELS])
     expect(tasks.length).toBe(2 + GUIDE_ENHANCE_LEVELS.length)
+  })
+})
+
+describe("toGuideHistoryData", () => {
+  it("字段名映射正确", () => {
+    const stats: any = { medianBuy1d: 88, medianSell1d: 96, avgVol5d: 40, report: {} }
+    expect(toGuideHistoryData(stats)).toEqual({ medianBuy: 88, medianSell: 96, avgVol: 40 })
   })
 })
 

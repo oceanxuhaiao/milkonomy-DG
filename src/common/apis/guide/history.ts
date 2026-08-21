@@ -1,5 +1,5 @@
 import { getIndexedDbValue, setIndexedDbValue } from "@/common/utils/cache/indexed-db"
-import { guideLevelsOf } from "./calc"
+import { type GuideHistoryData, guideLevelsOf } from "./calc"
 
 /** 历史行情 API 地址（未来切换自建数据源只改此处） */
 export const HISTORY_API_URL = "https://q7.nainai.eu.org/api/market/history"
@@ -47,6 +47,15 @@ export interface GuideHistoryStats {
     "1d": WindowReport
     "3d": WindowReport
     "5d": WindowReport
+  }
+}
+
+/** 把历史统计收窄为 calc 层需要的三级兜底数据（字段名映射集中于此） */
+export function toGuideHistoryData(stats: GuideHistoryStats): GuideHistoryData {
+  return {
+    medianBuy: stats.medianBuy1d,
+    medianSell: stats.medianSell1d,
+    avgVol: stats.avgVol5d
   }
 }
 

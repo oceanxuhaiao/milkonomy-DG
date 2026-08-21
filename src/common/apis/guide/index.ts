@@ -5,9 +5,15 @@ import { useGuideFavoriteStoreOutside } from "@/pinia/stores/guide-favorite"
 import { getGameDataApi, getPriceOf } from "../game"
 import { getManualPriceOf } from "../price"
 import { buildGuideRows, filterGuideList, guidePage, sortGuideList } from "./calc"
+import { type GuideHistoryStats, historyKeyOf, toGuideHistoryData } from "./history"
 
-/** 查：导购列表（倒卖视角，价格固定 ask/bid，不随全局买价/卖价状态变化） */
-export function getGuideDataApi(params: GuideRequestData) {
+export interface GuideApiParams extends GuideRequestData {
+  /** 历史行情数据（key = {hrid}|{level}），可选 */
+  historyData?: Map<string, GuideHistoryStats | "failed" | null>
+}
+
+/** 查：导购列表（挂单倒卖口径；价格固定 ask/bid 快照，历史数据注入后三级兜底） */
+export function getGuideDataApi(params: GuideApiParams) {
   // 数据未就绪时返回空
   const marketData = useGameStoreOutside().marketData
   const gameData = getGameDataApi()
@@ -15,6 +21,12 @@ export function getGuideDataApi(params: GuideRequestData) {
 
   const taxFactor = params.includeTax === false ? NO_TAX_FACTOR : SELL_TAX_FACTOR
   const items = Object.values(gameData.itemDetailMap)
+
+  const historyGetter = (hrid: string, level: number) => {
+    const stats = params.historyData?.get(historyKeyOf(hrid, level))
+    if (!stats || stats === "failed") return null
+    return toGuideHistoryData(stats)
+  }
 
   let list = buildGuideRows(
     items,
@@ -25,7 +37,8 @@ export function getGuideDataApi(params: GuideRequestData) {
     },
     // 归一化为契约要求的 GuideManualPrice | null
     (hrid, level) => getManualPriceOf(hrid, level) ?? null,
-    taxFactor
+    taxFactor,
+    historyGetter
   )
   list = filterGuideList(list, params)
   list = sortGuideList(list, params.sort)
