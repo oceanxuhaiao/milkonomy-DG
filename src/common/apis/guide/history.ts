@@ -406,13 +406,18 @@ export function parseHistoryFile(json: string): Map<string, HistoryPoint[]> {
     for (const raw of value) {
       if (!raw || typeof raw !== "object") continue
       const pt = raw as Record<string, unknown>
-      if (typeof pt.t !== "number") continue
+      const t = pt.t
+      if (typeof t !== "number" || !Number.isFinite(t)) continue
+      const a = pt.a
+      const b = pt.b
+      const p = pt.p
+      const v = pt.v
       points.push({
-        time: pt.t,
-        a: typeof pt.a === "number" ? pt.a : -1,
-        b: typeof pt.b === "number" ? pt.b : -1,
-        p: typeof pt.p === "number" ? pt.p : -1,
-        v: typeof pt.v === "number" ? pt.v : -1
+        time: t,
+        a: typeof a === "number" && Number.isFinite(a) ? a : -1,
+        b: typeof b === "number" && Number.isFinite(b) ? b : -1,
+        p: typeof p === "number" && Number.isFinite(p) ? p : -1,
+        v: typeof v === "number" && Number.isFinite(v) ? v : -1
       })
     }
     if (points.length > 0) map.set(key, points)

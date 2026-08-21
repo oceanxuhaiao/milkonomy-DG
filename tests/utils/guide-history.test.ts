@@ -485,14 +485,14 @@ describe("fetchHistoryFile", () => {
     expect(map.get("/items/a|0")?.length).toBe(1)
   })
 
-  it("hTTP 失败重试 1 次后抛错", async () => {
+  it("http 请求失败重试 1 次后抛错", async () => {
     const fetchMock = vi.fn(async () => new Response("err", { status: 500 }))
     vi.stubGlobal("fetch", fetchMock)
     await expect(fetchHistoryFile()).rejects.toThrow()
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
-  it("jSON 解析失败抛错", async () => {
+  it("json 解析失败抛错", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("not-json{", { status: 200 })))
     await expect(fetchHistoryFile()).rejects.toThrow()
   })
