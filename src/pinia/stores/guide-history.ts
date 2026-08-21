@@ -70,6 +70,7 @@ export const useGuideHistoryStore = defineStore("guideHistory", {
       } catch (e) {
         console.error("历史数据加载失败:", e)
         this.progress = null
+        this.version++ // 触发弹窗等消费者重读（失败态 → 无交易记录）
       }
     }
   }

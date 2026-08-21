@@ -29,6 +29,7 @@ const historyState = ref<"loading" | "ready" | "none">("loading")
 const historyStats = ref<GuideHistoryStats | null>(null)
 
 function readHistory(row: GuideItem) {
+  historyStats.value = null
   const cached = historyStore.data.get(historyKeyOf(row.hrid, row.level))
   if (cached === null) {
     historyState.value = "none"
