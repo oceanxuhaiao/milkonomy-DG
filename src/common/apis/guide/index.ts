@@ -10,9 +10,18 @@ import { type GuideHistoryEntry, historyKeyOf, toGuideHistoryData } from "./hist
 export interface GuideApiParams extends GuideRequestData {
   /**
    * 历史行情数据（key = {hrid}|{level}），可选。
-   * 值两态：GuideHistoryStats 统计值（参与三级兜底）/ null 无有效记录（视同无历史）。
+   * 值两态：GuideHistoryStats 统计值（参与三级兜底）/ null 无有效记录。
    */
   historyData?: Map<string, GuideHistoryEntry>
+  /** 整份历史文件是否已加载完成；完成后缺失条目表示5天零成交 */
+  historyReady?: boolean
+}
+
+export function getGuideHistoryData(params: Pick<GuideApiParams, "historyData" | "historyReady">, hrid: string, level: number) {
+  const stats = params.historyData?.get(historyKeyOf(hrid, level))
+  if (stats) return toGuideHistoryData(stats)
+  if (params.historyReady) return { medianBuy: -1, medianSell: -1, avgVol: 0 }
+  return null
 }
 
 /** 查：导购列表（挂单倒卖口径；价格固定 ask/bid 快照，历史数据注入后三级兜底） */
@@ -26,9 +35,7 @@ export function getGuideDataApi(params: GuideApiParams) {
   const items = Object.values(gameData.itemDetailMap)
 
   const historyGetter = (hrid: string, level: number) => {
-    const stats = params.historyData?.get(historyKeyOf(hrid, level))
-    if (!stats) return null
-    return toGuideHistoryData(stats)
+    return getGuideHistoryData(params, hrid, level)
   }
 
   let list = buildGuideRows(

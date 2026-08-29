@@ -1,3 +1,4 @@
+import { getGuideHistoryData } from "@@/apis/guide"
 import { buildGuideRows, resolveGuidePrice } from "@@/apis/guide/calc"
 import { calcHistoryStats, fetchHistoryFile, getPriceTier, historyKeyOf, parseHistoryFile, toGuideHistoryData } from "@@/apis/guide/history"
 import { createPinia, setActivePinia } from "pinia"
@@ -307,6 +308,25 @@ describe("resolveGuidePrice 三级兜底", () => {
     const history = { medianBuy: 88, medianSell: 96, avgVol: 40 }
     const r = resolveGuidePrice(null, { ask: -1, bid: 90, vol: 50 }, history)
     expect(r.priceDeviation).toEqual({ buy: (90 - 88) / 88, sell: null })
+  })
+})
+
+describe("getGuideHistoryData", () => {
+  it("历史未就绪且条目缺失时允许回退当前快照", () => {
+    expect(getGuideHistoryData({ historyData: new Map(), historyReady: false }, "/items/a", 12)).toBeNull()
+  })
+
+  it("历史已就绪且条目缺失时按5天零成交处理", () => {
+    expect(getGuideHistoryData({ historyData: new Map(), historyReady: true }, "/items/a", 12)).toEqual({
+      medianBuy: -1,
+      medianSell: -1,
+      avgVol: 0
+    })
+  })
+
+  it("历史已就绪且条目为null时按5天零成交处理", () => {
+    const historyData = new Map<string, any>([["/items/a|12", null]])
+    expect(getGuideHistoryData({ historyData, historyReady: true }, "/items/a", 12)?.avgVol).toBe(0)
   })
 })
 

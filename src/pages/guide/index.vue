@@ -62,7 +62,8 @@ const getGuideData = debounce(() => {
       includeTax: includeTax.value,
       ...gdSearchData.value,
       sort: sortGD.value,
-      historyData: historyStore.data
+      historyData: historyStore.data,
+      historyReady: historyStore.ready
     })
     paginationDataGD.total = data.total
     guideData.value = data.list
