@@ -3,7 +3,7 @@ import type { GuideItem } from "@@/apis/guide/type"
 import { getGuideDataApi } from "@@/apis/guide"
 import ItemIcon from "@@/components/ItemIcon/index.vue"
 import { usePagination } from "@@/composables/usePagination"
-import { Edit, Search, Star, StarFilled } from "@element-plus/icons-vue"
+import { Edit, QuestionFilled, Search, Star, StarFilled } from "@element-plus/icons-vue"
 import { ElMessage, ElMessageBox, type FormInstance, type Sort } from "element-plus"
 import { cloneDeep, debounce } from "lodash-es"
 
@@ -14,6 +14,7 @@ import { useGuideFavoriteStore } from "@/pinia/stores/guide-favorite"
 import { useGuideHistoryStore } from "@/pinia/stores/guide-history"
 import { usePriceStore } from "@/pinia/stores/price"
 import GuideDetail from "./components/GuideDetail.vue"
+import GuideHelp from "./components/GuideHelp.vue"
 import GuidePrice from "./components/GuidePrice.vue"
 
 // #region 查
@@ -50,6 +51,7 @@ const gdSearchData = useMemory("guide-search-data", {
 const includeTax = useMemory("guide-include-tax", true)
 
 const loadingGD = ref(false)
+const helpVisible = ref(false)
 
 const sortGD: Ref<Sort | undefined> = ref({ prop: "profitPH", order: "descending" })
 
@@ -190,6 +192,9 @@ function formatVolume1h(row: GuideItem) {
         <el-form class="rank-card" ref="gdSearchFormRef" :inline="true" :model="gdSearchData">
           <div class="title">
             {{ t('导购工具') }}
+            <el-button type="primary" link :icon="QuestionFilled" @click="helpVisible = true">
+              使用说明
+            </el-button>
           </div>
           <el-form-item prop="name" :label="t('物品')">
             <el-input style="width:100px" v-model="gdSearchData.name" :placeholder="t('请输入')" clearable @input="handleSearchGD" />
@@ -326,6 +331,7 @@ function formatVolume1h(row: GuideItem) {
     </el-card>
     <GuideDetail v-model="detailVisible" :data="currentRow" />
     <GuidePrice v-model="priceVisible" :data="currentPriceRow" />
+    <GuideHelp v-model="helpVisible" />
   </div>
 </template>
 
@@ -337,6 +343,9 @@ function formatVolume1h(row: GuideItem) {
   .title {
     width: 160px;
     margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 }
 .pager-wrapper {
