@@ -35,7 +35,7 @@ export interface GuideHistoryStats {
   medianBuy1d: number
   /** 最近24h 卖价(a)中位数，无数据 -1 */
   medianSell1d: number
-  /** 最近120h 成交量(v)总和 / 120，无数据 -1 */
+  /** 最近120h 成交量(v)总和 / 120；仅有报价但无成交记录时为0 */
   avgVol5d: number
   report: {
     "1d": WindowReport
@@ -187,8 +187,9 @@ function calcBuySellVolume(points: HistoryPoint[]): { buyVolume: number, sellVol
 }
 
 function buildWindowReport(points: HistoryPoint[]): WindowReport {
-  const totalV = points.reduce((sum, item) => sum + item.v, 0)
-  const totalPV = points.reduce((sum, item) => sum + item.p * item.v, 0)
+  const tradedPoints = points.filter(item => item.v > 0)
+  const totalV = tradedPoints.reduce((sum, item) => sum + item.v, 0)
+  const totalPV = tradedPoints.reduce((sum, item) => sum + item.p * item.v, 0)
   const avgPrice = totalV > 0 ? totalPV / totalV : 0
 
   let minPrice = 0
@@ -235,7 +236,7 @@ export function calcHistoryStats(points: HistoryPoint[], nowSec: number = Math.f
   const medianSell1d = medianOf(sells1d)
   // 历史文件只记录有行情的小时。未出现的小时应视为 0 成交，
   // 否则低流通物品（例如 5 天仅成交 1 件）会被错误计算成 1 件/h。
-  const avgVol5d = vols5d.length > 0 ? vols5d.reduce((s, v) => s + v, 0) / 120 : -1
+  const avgVol5d = vols5d.reduce((s, v) => s + v, 0) / 120
 
   const report = {
     "1d": buildWindowReport(valid5d.filter(p => inWindow(p, WINDOWS["1d"]))),

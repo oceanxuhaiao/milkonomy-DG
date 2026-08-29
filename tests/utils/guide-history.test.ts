@@ -47,6 +47,12 @@ describe("calcHistoryStats", () => {
     expect(s.avgVol5d).toBeCloseTo(1 / 120, 10)
   })
 
+  it("5天内只有报价、成交量字段无效时按0成交处理", () => {
+    const s = calcHistoryStats([pt(10, 15, 10, -1, -1)], NOW)!
+    expect(s.avgVol5d).toBe(0)
+    expect(s.report["5d"].volume).toBe(0)
+  })
+
   it("窗口边界：恰好 24h/120h 的记录算在窗口内", () => {
     const points = [pt(24, 15, 10, 13, 7), pt(120, 15, 10, 13, 9)]
     const s = calcHistoryStats(points, NOW)!
