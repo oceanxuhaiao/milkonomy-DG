@@ -37,10 +37,12 @@ export interface WindowReport {
 }
 
 export interface GuideHistoryStats {
-  /** 最近24h 买价(b)中位数，无数据 -1 */
+  /** 最近24h 卖家主动成交价加权中位数；无该侧成交时回退 bid 快照中位数 */
   medianBuy1d: number
-  /** 最近24h 卖价(a)中位数，无数据 -1 */
+  /** 最近24h 买家主动成交价加权中位数；无该侧成交时回退 ask 快照中位数 */
   medianSell1d: number
+  buyPriceSource: "trade" | "bid-snapshot" | "none"
+  sellPriceSource: "trade" | "ask-snapshot" | "none"
   /** 最近120h 成交量(v)总和 / 120；仅有报价但无成交记录时为0 */
   avgVol5d: number
   report: {
@@ -120,6 +122,27 @@ function calcWeightedMedianPrice(points: HistoryPoint[]): number {
     if (accumVol >= midVol) return item.p
   }
   return priceList[priceList.length - 1].p
+}
+
+/** 按成交价更接近当时 bid 还是 ask，估算主动成交方向。 */
+export function splitTradeSides(points: HistoryPoint[]) {
+  const buySide: HistoryPoint[] = []
+  const sellSide: HistoryPoint[] = []
+  for (const point of points) {
+    if (!(point.v > 0) || !(point.p > 0)) continue
+    const hasAsk = point.a > 0
+    const hasBid = point.b > 0
+    if (hasAsk && point.p >= point.a) {
+      buySide.push(point)
+    } else if (hasBid && point.p <= point.b) {
+      sellSide.push(point)
+    } else if (hasAsk && hasBid) {
+      const distanceToAsk = Math.abs(point.a - point.p)
+      const distanceToBid = Math.abs(point.p - point.b)
+      ;(distanceToAsk < distanceToBid ? buySide : sellSide).push(point)
+    }
+  }
+  return { buySide, sellSide }
 }
 
 /** 买/卖盘成交量估算（来源：交易量显示插件 processMarketData 的按小时分析法） */
@@ -234,12 +257,18 @@ export function calcHistoryStats(points: HistoryPoint[], nowSec: number = Math.f
   const valid5d = points.filter(p => inWindow(p, WINDOWS["5d"]) && (p.v > 0 || p.a > 0 || p.b > 0))
   if (valid5d.length === 0) return null
 
-  const buys1d = valid5d.filter(p => inWindow(p, WINDOWS["1d"]) && p.b > 0).map(p => p.b)
-  const sells1d = valid5d.filter(p => inWindow(p, WINDOWS["1d"]) && p.a > 0).map(p => p.a)
+  const points1d = valid5d.filter(p => inWindow(p, WINDOWS["1d"]))
+  const bids1d = points1d.filter(p => p.b > 0).map(p => p.b)
+  const asks1d = points1d.filter(p => p.a > 0).map(p => p.a)
   const vols5d = valid5d.filter(p => p.v >= 0).map(p => p.v)
 
-  const medianBuy1d = medianOf(buys1d)
-  const medianSell1d = medianOf(sells1d)
+  const { buySide, sellSide } = splitTradeSides(points1d)
+  const buyTradeMedian = calcWeightedMedianPrice(sellSide)
+  const sellTradeMedian = calcWeightedMedianPrice(buySide)
+  const medianBuy1d = buyTradeMedian > 0 ? buyTradeMedian : medianOf(bids1d)
+  const medianSell1d = sellTradeMedian > 0 ? sellTradeMedian : medianOf(asks1d)
+  const buyPriceSource = buyTradeMedian > 0 ? "trade" : medianBuy1d > 0 ? "bid-snapshot" : "none"
+  const sellPriceSource = sellTradeMedian > 0 ? "trade" : medianSell1d > 0 ? "ask-snapshot" : "none"
   // 历史文件只记录有行情的小时。未出现的小时应视为 0 成交，
   // 否则低流通物品（例如 5 天仅成交 1 件）会被错误计算成 1 件/h。
   const avgVol5d = vols5d.reduce((s, v) => s + v, 0) / 120
@@ -250,7 +279,7 @@ export function calcHistoryStats(points: HistoryPoint[], nowSec: number = Math.f
     "5d": buildWindowReport(valid5d)
   }
 
-  return { medianBuy1d, medianSell1d, avgVol5d, report }
+  return { medianBuy1d, medianSell1d, buyPriceSource, sellPriceSource, avgVol5d, report }
 }
 
 export function historyKeyOf(hrid: string, level: number) {

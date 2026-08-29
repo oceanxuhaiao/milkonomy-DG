@@ -23,7 +23,7 @@ export interface GuideItem {
   hasManualPrice: boolean
   /** 是否有历史行情数据参与计算 */
   hasHistory: boolean
-  /** 快照价相对 1d 中位价的偏差（正=快照偏高）；对应侧手动价或无数据时为 null */
+  /** 快照价相对 1d 成交参考价的偏差（正=快照偏高）；对应侧手动价或无数据时为 null */
   priceDeviation: { buy: number | null, sell: number | null } | null
   favorite: boolean
 }

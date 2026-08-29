@@ -72,9 +72,9 @@ export interface GuideManualPrice {
 
 /** 历史行情注入数据（由 store 提供；值无效时回落快照） */
 export interface GuideHistoryData {
-  /** 1d 买价中位数，<=0 无效 */
+  /** 1d 卖家主动成交参考价（无成交时已回退 bid 快照中位数），<=0 无效 */
   medianBuy: number
-  /** 1d 卖价中位数，<=0 无效 */
+  /** 1d 买家主动成交参考价（无成交时已回退 ask 快照中位数），<=0 无效 */
   medianSell: number
   /** 5d 平均每小时成交量，<0 无效 */
   avgVol: number
@@ -82,7 +82,7 @@ export interface GuideHistoryData {
 
 /**
  * 挂单倒卖口径的价格解析，三级兜底：
- * 买价 = 手动(bid侧) > 1d历史中位买价 > 市场 bid；卖价同理取 ask 侧；成交量 = 5d均量 > 快照。
+ * 买价 = 手动价 > 1d卖家主动成交中位价 > 1d bid中位价 > 当前bid；卖价对应买家主动成交/ask。
  */
 export function resolveGuidePrice(
   manual: GuideManualPrice | null | undefined,

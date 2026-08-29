@@ -98,6 +98,13 @@ const historyRows = computed(() => {
   if (!s) return []
   return WINDOW_KEYS.map(k => reportRow(k, s.report[k]))
 })
+
+function sourceLabel(source: GuideHistoryStats["buyPriceSource"] | GuideHistoryStats["sellPriceSource"]) {
+  if (source === "trade") return "24小时分方向成交中位价"
+  if (source === "bid-snapshot") return "24小时 bid 快照中位数（成交兜底）"
+  if (source === "ask-snapshot") return "24小时 ask 快照中位数（成交兜底）"
+  return "当前挂单快照"
+}
 </script>
 
 <template>
@@ -159,6 +166,12 @@ const historyRows = computed(() => {
         <div>当前挂单快照：{{ fmtTime((gameStore.marketData?.timestamp ?? 0) * 1000) }}</div>
         <div>历史数据采集：{{ fmtTime(historyStore.sourceUpdatedAt * 1000) }}</div>
         <div>本次排行计算：{{ fmtTime(data.calculatedAt ?? 0) }}</div>
+        <div v-if="historyStats">
+          买价来源：{{ sourceLabel(historyStats.buyPriceSource) }}
+        </div>
+        <div v-if="historyStats">
+          卖价来源：{{ sourceLabel(historyStats.sellPriceSource) }}
+        </div>
         <div v-if="historyStore.usingStaleCache">
           网络失败，正在使用上次成功缓存
         </div>

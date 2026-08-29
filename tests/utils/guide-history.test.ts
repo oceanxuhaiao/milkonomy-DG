@@ -1,6 +1,6 @@
 import { getGuideHistoryData } from "@@/apis/guide"
 import { buildGuideRows, resolveGuidePrice } from "@@/apis/guide/calc"
-import { calcHistoryStats, fetchHistoryFile, getPriceTier, historyKeyOf, parseHistoryFile, toGuideHistoryData } from "@@/apis/guide/history"
+import { calcHistoryStats, fetchHistoryFile, getPriceTier, historyKeyOf, parseHistoryFile, splitTradeSides, toGuideHistoryData } from "@@/apis/guide/history"
 import { createPinia, setActivePinia } from "pinia"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { useGuideHistoryStore } from "@/pinia/stores/guide-history"
@@ -20,20 +20,30 @@ function pt(hoursAgo: number, a: number, b: number, p: number, v: number) {
 }
 
 describe("calcHistoryStats", () => {
-  it("1d 中位买/卖价（b/a<=0 不参与中位）", () => {
-    // 24h 内 4 条 b：10, -1(无效), 12, 14 → 有效 [10,12,14] 中位 12
+  it("按主动成交方向计算买卖成交量加权中位价", () => {
     const points = [
-      pt(2, 15, 10, 13, 5),
-      pt(5, 16, -1, 14, 5),
-      pt(8, 17, 12, 15, 5),
-      pt(10, 18, 14, 16, 5),
-      // 24h 外（不影响 1d）
-      pt(30, 100, 1, 50, 5)
+      pt(2, 15, 10, 10, 8), // 卖家主动成交 → 买价候选
+      pt(5, 16, 11, 11, 2), // 卖家主动成交
+      pt(8, 17, 12, 17, 7), // 买家主动成交 → 卖价候选
+      pt(10, 18, 13, 18, 3) // 买家主动成交
     ]
     const s = calcHistoryStats(points, NOW)!
-    expect(s.medianBuy1d).toBe(12)
-    // 24h 内 a：15,16,17,18 → 偶数个取中间两个平均 (16+17)/2
-    expect(s.medianSell1d).toBe(16.5)
+    expect(s.medianBuy1d).toBe(10)
+    expect(s.medianSell1d).toBe(17)
+  })
+
+  it("一侧无成交时回退到该侧挂单快照中位数", () => {
+    const s = calcHistoryStats([pt(2, 15, 10, -1, 0), pt(3, 17, 12, -1, 0)], NOW)!
+    expect(s.medianBuy1d).toBe(11)
+    expect(s.medianSell1d).toBe(16)
+  })
+
+  it("中间成交按离 bid/ask 更近的一侧分类", () => {
+    const nearAsk = pt(2, 20, 10, 18, 1)
+    const nearBid = pt(3, 20, 10, 12, 1)
+    const sides = splitTradeSides([nearAsk, nearBid])
+    expect(sides.buySide).toEqual([nearAsk])
+    expect(sides.sellSide).toEqual([nearBid])
   })
 
   it("5d 均量为窗口内总成交量除以120小时", () => {
@@ -185,7 +195,7 @@ describe("guide-history store", () => {
     expect(store.ready).toBe(true)
     expect(store.progress).toBeNull()
     const a = store.data.get("/items/a|0") as any
-    expect(a.medianBuy1d).toBe(4)
+    expect(a.medianBuy1d).toBe(4.5)
     expect(a.medianSell1d).toBe(5)
     expect(store.data.get("/items/b|0")).toBeTruthy()
     // 整文件单条目缓存写入
@@ -209,7 +219,7 @@ describe("guide-history store", () => {
     expect(store.ready).toBe(true)
     expect(vi.mocked(fetch)).not.toHaveBeenCalled()
     const a = store.data.get("/items/a|0") as any
-    expect(a.medianBuy1d).toBe(4)
+    expect(a.medianBuy1d).toBe(4.5)
   })
 
   it("下载失败时 ready 保持 false 且 progress 复位", async () => {
