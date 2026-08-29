@@ -24,7 +24,10 @@ const activeMenu = computed(() => route.meta.activeMenu || route.path)
 
 // 过滤路由：隐藏 hidden 的路由，以及冻结期间不允许访问的路由
 const noHiddenRoutes = computed(() => {
-  let routes = permissionStore.routes.filter(item => !item.meta?.hidden)
+  // 导购专用版本：界面菜单仅保留导购工具，其他路由代码继续保留以便后续同步上游。
+  let routes = permissionStore.routes.filter(item =>
+    !item.meta?.hidden && item.children?.some(child => child.name === "Guide")
+  )
 
   // 如果在冻结期间，只显示允许访问的路由
   if (isInFreezePeriod()) {

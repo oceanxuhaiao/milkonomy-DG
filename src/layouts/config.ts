@@ -52,4 +52,9 @@ const DEFAULT_CONFIG: LayoutsConfig = {
 }
 
 /** 项目配置 */
-export const layoutsConfig: LayoutsConfig = { ...DEFAULT_CONFIG, ...getLayoutsConfig() }
+export const layoutsConfig: LayoutsConfig = {
+  ...DEFAULT_CONFIG,
+  ...getLayoutsConfig(),
+  // 导购专用版本不显示其他功能留下的历史标签页。
+  showTagsView: false
+}

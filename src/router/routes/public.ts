@@ -40,7 +40,7 @@ export const publicRoutes: RouteRecordRaw[] = [
   {
     path: "/",
     component: Layouts,
-    redirect: "/dashboard",
+    redirect: "/guide",
     children: [
       {
         path: "dashboard",
@@ -49,7 +49,8 @@ export const publicRoutes: RouteRecordRaw[] = [
         meta: {
           title: t("首页"),
           svgIcon: "dashboard",
-          affix: true
+          affix: false,
+          hidden: true
         }
       }
     ]
@@ -66,7 +67,7 @@ export const publicRoutes: RouteRecordRaw[] = [
         meta: {
           title: t("导购工具"),
           svgIcon: "dashboard",
-          affix: false
+          affix: true
         }
       }
     ]
