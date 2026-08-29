@@ -4,6 +4,7 @@ import type { GuideItem } from "@@/apis/guide/type"
 import { historyKeyOf } from "@@/apis/guide/history"
 import ItemIcon from "@@/components/ItemIcon/index.vue"
 import * as Format from "@/common/utils/format"
+import { useGameStore } from "@/pinia/stores/game"
 import { useGuideHistoryStore } from "@/pinia/stores/guide-history"
 
 const props = defineProps<{
@@ -24,6 +25,15 @@ function fmt(value: number | null | undefined) {
 }
 
 const historyStore = useGuideHistoryStore()
+const gameStore = useGameStore()
+
+function fmtTime(milliseconds: number) {
+  return milliseconds > 0 ? new Date(milliseconds).toLocaleString() : "-"
+}
+
+const historyAgeHours = computed(() => historyStore.sourceUpdatedAt > 0
+  ? (Date.now() - historyStore.sourceUpdatedAt * 1000) / 3600000
+  : Infinity)
 
 const historyState = ref<"loading" | "ready" | "none">("loading")
 const historyStats = ref<GuideHistoryStats | null>(null)
@@ -123,7 +133,36 @@ const historyRows = computed(() => {
         <el-descriptions-item :label="t('利润 / 天')">
           {{ fmt(data.profitPD) }}
         </el-descriptions-item>
+        <el-descriptions-item label="建议最大投入">
+          <template v-if="data.suggestedMaxInvestment != null">
+            {{ fmt(data.suggestedMaxInvestment) }}（约 {{ data.suggestedMaxUnits }} 件）
+          </template>
+          <template v-else>
+            -
+          </template>
+        </el-descriptions-item>
+        <el-descriptions-item label="投入建议口径">
+          预计24小时成交量的25%
+        </el-descriptions-item>
       </el-descriptions>
+
+      <el-alert
+        v-if="historyStore.usingStaleCache || historyAgeHours > 18"
+        type="warning"
+        :closable="false"
+        show-icon
+        title="历史数据可能已过期，当前结果仅供谨慎参考"
+        style="margin-top:12px"
+      />
+
+      <div class="data-times">
+        <div>当前挂单快照：{{ fmtTime((gameStore.marketData?.timestamp ?? 0) * 1000) }}</div>
+        <div>历史数据采集：{{ fmtTime(historyStore.sourceUpdatedAt * 1000) }}</div>
+        <div>本次排行计算：{{ fmtTime(data.calculatedAt ?? 0) }}</div>
+        <div v-if="historyStore.usingStaleCache">
+          网络失败，正在使用上次成功缓存
+        </div>
+      </div>
 
       <div style="font-weight:bold;margin:16px 0 8px">
         {{ t('历史行情') }}
@@ -149,3 +188,17 @@ const historyRows = computed(() => {
     </template>
   </el-dialog>
 </template>
+
+<style scoped>
+.data-times {
+  margin-top: 12px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.8;
+}
+@media (max-width: 768px) {
+  :deep(.el-dialog) {
+    width: 96% !important;
+  }
+}
+</style>

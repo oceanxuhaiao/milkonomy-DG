@@ -16,6 +16,10 @@ export interface GuideItem {
   profitPD: number | null
   /** 利润/h × √有效利润率 × 价格可信度 */
   tradingEfficiency: number | null
+  /** 建议最大投入：按预计日成交量的25%计算，至少1件；不代表一定能成交 */
+  suggestedMaxUnits?: number | null
+  suggestedMaxInvestment?: number | null
+  calculatedAt?: number
   hasManualPrice: boolean
   /** 是否有历史行情数据参与计算 */
   hasHistory: boolean

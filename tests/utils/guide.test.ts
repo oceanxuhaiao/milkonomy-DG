@@ -1,4 +1,4 @@
-import { buildGuideRows, calcGuideItem, calcTradingEfficiency, filterGuideList, guidePage, isEquipmentItem, resolveGuidePrice, sortGuideList } from "@@/apis/guide/calc"
+import { buildGuideRows, calcGuideItem, calcSuggestedInvestment, calcTradingEfficiency, filterGuideList, guidePage, isEquipmentItem, resolveGuidePrice, sortGuideList } from "@@/apis/guide/calc"
 import { describe, expect, it } from "vitest"
 
 describe("calcGuideItem", () => {
@@ -62,6 +62,21 @@ describe("calcTradingEfficiency", () => {
     expect(calcTradingEfficiency(1000, -0.2, { buy: 0, sell: 0 })).toBe(0)
     expect(calcTradingEfficiency(null, 0.2, null)).toBeNull()
     expect(calcTradingEfficiency(1000, null, null)).toBeNull()
+  })
+})
+
+describe("calcSuggestedInvestment", () => {
+  it("按预计日成交量的25%计算保守投入上限", () => {
+    expect(calcSuggestedInvestment(100, 10)).toEqual({ suggestedMaxUnits: 60, suggestedMaxInvestment: 6000 })
+  })
+
+  it("低流动性项目最多建议先试1件", () => {
+    expect(calcSuggestedInvestment(100, 1 / 120)).toEqual({ suggestedMaxUnits: 1, suggestedMaxInvestment: 100 })
+  })
+
+  it("无价格或无成交时不提供投入建议", () => {
+    expect(calcSuggestedInvestment(0, 10).suggestedMaxInvestment).toBeNull()
+    expect(calcSuggestedInvestment(100, 0).suggestedMaxInvestment).toBeNull()
   })
 })
 

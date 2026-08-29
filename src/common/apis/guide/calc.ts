@@ -41,6 +41,15 @@ export function calcTradingEfficiency(
   return profitPH * Math.sqrt(effectiveRate) * confidence
 }
 
+/** 保守投入上限：最多占预计24小时成交量的25%，且仅在有正成交量和有效买价时给出。 */
+export function calcSuggestedInvestment(buyPrice: number, hourlyVolume: number) {
+  if (!(buyPrice > 0) || !(hourlyVolume > 0)) {
+    return { suggestedMaxUnits: null, suggestedMaxInvestment: null }
+  }
+  const suggestedMaxUnits = Math.max(1, Math.floor(hourlyVolume * 24 * 0.25))
+  return { suggestedMaxUnits, suggestedMaxInvestment: suggestedMaxUnits * buyPrice }
+}
+
 export function isEquipmentItem(item: { categoryHrid?: string }) {
   return item.categoryHrid === "/item_categories/equipment"
 }
@@ -147,6 +156,7 @@ export function buildGuideRows(
       )
       const profit = calcGuideItem(price.buyPrice, price.sellPrice, price.vol, taxFactor)
       const tradingEfficiency = calcTradingEfficiency(profit.profitPH, profit.profitRate, price.priceDeviation)
+      const investment = calcSuggestedInvestment(price.buyPrice, price.vol)
       rows.push({
         hrid: item.hrid,
         level,
@@ -155,6 +165,8 @@ export function buildGuideRows(
         ...price,
         ...profit,
         tradingEfficiency,
+        ...investment,
+        calculatedAt: Date.now(),
         favorite: false
       })
     }

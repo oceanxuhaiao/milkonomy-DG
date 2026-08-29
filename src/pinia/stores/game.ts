@@ -168,7 +168,15 @@ export const useGameStore = defineStore("game", {
       const DATA_URL = `${url}data/data.json`
       const marketUrl = MARKET_URLS[(4 - offset) % MARKET_URLS.length]
 
-      const response = await Promise.all([fetch(DATA_URL), fetch(marketUrl)])
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000)
+      const requestOptions = { signal: controller.signal, credentials: "omit" as const, referrerPolicy: "no-referrer" as const }
+      let response: Response[]
+      try {
+        response = await Promise.all([fetch(DATA_URL, requestOptions), fetch(marketUrl, requestOptions)])
+      } finally {
+        clearTimeout(timeoutId)
+      }
       if (!response[0].ok || !response[1].ok) {
         throw new Error("Response not ok")
       }

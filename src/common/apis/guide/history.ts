@@ -6,6 +6,12 @@ export const HISTORY_FILE_URL = "https://oceanxuhaiao.github.io/milkonomy-histor
 
 /** 缓存过期时间：12 小时（保守频率，减轻第三方服务器负担） */
 export const HISTORY_CACHE_TTL = 12 * 60 * 60 * 1000
+export const HISTORY_STALE_AFTER = 18 * 60 * 60 * 1000
+
+let lastHistorySourceUpdatedAt = 0
+export function getLastHistorySourceUpdatedAt() {
+  return lastHistorySourceUpdatedAt
+}
 
 export interface HistoryPoint {
   /** 秒级时间戳 */
@@ -311,6 +317,15 @@ export function parseHistoryFile(json: string): Map<string, HistoryPoint[]> {
   return map
 }
 
+export function parseHistoryUpdatedAt(json: string): number {
+  try {
+    const value = JSON.parse(json)?.updatedAt
+    return typeof value === "number" && Number.isFinite(value) ? value : 0
+  } catch {
+    return 0
+  }
+}
+
 /** 下载自建历史数据文件（5 秒超时，失败重试 1 次，仍失败抛错） */
 export async function fetchHistoryFile(): Promise<Map<string, HistoryPoint[]>> {
   let lastError: unknown = null
@@ -323,6 +338,7 @@ export async function fetchHistoryFile(): Promise<Map<string, HistoryPoint[]>> {
       const text = await res.text()
       const map = parseHistoryFile(text)
       if (map.size === 0) throw new Error("历史数据文件为空或格式错误")
+      lastHistorySourceUpdatedAt = parseHistoryUpdatedAt(text)
       return map
     } catch (e) {
       lastError = e
