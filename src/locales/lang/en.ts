@@ -144,6 +144,7 @@ export default {
   "均价": "Avg",
   "成交量": "Vol",
   "成交量(1h)": "Vol (1h)",
+  "倒货效率": "Flipping Efficiency",
   "强化消耗": "Enhance Cost",
   "贤者镜触发福气": "Blessed In Philosopher",
   "目标": "Target",

@@ -117,6 +117,9 @@ const historyRows = computed(() => {
         <el-descriptions-item :label="t('利润 / h')">
           {{ fmt(data.profitPH) }}
         </el-descriptions-item>
+        <el-descriptions-item :label="t('倒货效率')">
+          {{ fmt(data.tradingEfficiency) }}
+        </el-descriptions-item>
         <el-descriptions-item :label="t('利润 / 天')">
           {{ fmt(data.profitPD) }}
         </el-descriptions-item>

@@ -1,4 +1,4 @@
-import { buildGuideRows, calcGuideItem, filterGuideList, guidePage, isEquipmentItem, resolveGuidePrice, sortGuideList } from "@@/apis/guide/calc"
+import { buildGuideRows, calcGuideItem, calcTradingEfficiency, filterGuideList, guidePage, isEquipmentItem, resolveGuidePrice, sortGuideList } from "@@/apis/guide/calc"
 import { describe, expect, it } from "vitest"
 
 describe("calcGuideItem", () => {
@@ -40,6 +40,28 @@ describe("calcGuideItem", () => {
     const r = calcGuideItem(100, 120, 0, 0.95)
     expect(r.profitPH).toBe(0)
     expect(r.profitPD).toBe(0)
+  })
+})
+
+describe("calcTradingEfficiency", () => {
+  it("零偏差时使用完整基础效率", () => {
+    expect(calcTradingEfficiency(1000, 0.25, { buy: 0, sell: 0 })).toBe(500)
+  })
+
+  it("最大偏差5%时价格系数为0.75", () => {
+    expect(calcTradingEfficiency(1000, 0.25, { buy: 0.05, sell: 0.01 })).toBeCloseTo(375, 10)
+  })
+
+  it("仅一侧有偏差时使用该侧，两侧缺失时系数为0.5", () => {
+    expect(calcTradingEfficiency(1000, 0.25, { buy: 0.05, sell: null })).toBeCloseTo(375, 10)
+    expect(calcTradingEfficiency(1000, 0.25, null)).toBe(250)
+  })
+
+  it("利润率限制在0~100%，无效利润数据返回null", () => {
+    expect(calcTradingEfficiency(1000, 2, { buy: 0, sell: 0 })).toBe(1000)
+    expect(calcTradingEfficiency(1000, -0.2, { buy: 0, sell: 0 })).toBe(0)
+    expect(calcTradingEfficiency(null, 0.2, null)).toBeNull()
+    expect(calcTradingEfficiency(1000, null, null)).toBeNull()
   })
 })
 
@@ -101,6 +123,12 @@ describe("buildGuideRows", () => {
     expect(rows.map(r => r.level)).toEqual([0, 5, 7, 8, 10, 12, 13, 14, 15])
     // 成交量按 level 传入，验证 getter 收到正确等级
     expect(rows[1].vol).toBe(15)
+  })
+
+  it("生成倒货效率字段", () => {
+    const historyGetter = () => ({ medianBuy: 120, medianSell: 100, avgVol: 10 })
+    const rows = buildGuideRows([plainItem], priceGetter, manualGetter, 1, historyGetter)
+    expect(rows[0].tradingEfficiency).not.toBeNull()
   })
 
   it("手动价行标记 hasManualPrice", () => {
@@ -203,6 +231,14 @@ describe("sortGuideList", () => {
     expect(sortGuideList(rows, { prop: "profitRate", order: "descending" }).map(r => r.profitRate)).toEqual([0.3, 0.1, 0.05])
   })
 
+  it("倒货效率列排序", () => {
+    const rows = [row(100), row(300), row(200)]
+    rows[0].tradingEfficiency = 30
+    rows[1].tradingEfficiency = 10
+    rows[2].tradingEfficiency = 20
+    expect(sortGuideList(rows, { prop: "tradingEfficiency", order: "descending" }).map(r => r.tradingEfficiency)).toEqual([30, 20, 10])
+  })
+
   it("排序列同值时兜底按利润/h降序", () => {
     const rows = [row(100, 0.1), row(300, 0.1)]
     // profitRate 相同 → 触发兜底：profitPH 高的 300 排前面
@@ -224,9 +260,9 @@ describe("sortGuideList", () => {
 
   it("vol 为 -1 的行按成交量排序时恒排最后", () => {
     const rows = [
-      { hrid: "/items/a", level: 0, name: "A", item: {} as any, buyPrice: 1, sellPrice: 1, vol: 50, profitPP: 1, profitRate: 0.1, profitPH: 100, profitPD: 2400, hasManualPrice: false, hasHistory: false, priceDeviation: null, favorite: false },
-      { hrid: "/items/b", level: 0, name: "B", item: {} as any, buyPrice: 1, sellPrice: 1, vol: -1, profitPP: 1, profitRate: 0.1, profitPH: 100, profitPD: 2400, hasManualPrice: false, hasHistory: false, priceDeviation: null, favorite: false },
-      { hrid: "/items/c", level: 0, name: "C", item: {} as any, buyPrice: 1, sellPrice: 1, vol: 10, profitPP: 1, profitRate: 0.1, profitPH: 100, profitPD: 2400, hasManualPrice: false, hasHistory: false, priceDeviation: null, favorite: false }
+      { hrid: "/items/a", level: 0, name: "A", item: {} as any, buyPrice: 1, sellPrice: 1, vol: 50, profitPP: 1, profitRate: 0.1, profitPH: 100, profitPD: 2400, tradingEfficiency: 10, hasManualPrice: false, hasHistory: false, priceDeviation: null, favorite: false },
+      { hrid: "/items/b", level: 0, name: "B", item: {} as any, buyPrice: 1, sellPrice: 1, vol: -1, profitPP: 1, profitRate: 0.1, profitPH: 100, profitPD: 2400, tradingEfficiency: 10, hasManualPrice: false, hasHistory: false, priceDeviation: null, favorite: false },
+      { hrid: "/items/c", level: 0, name: "C", item: {} as any, buyPrice: 1, sellPrice: 1, vol: 10, profitPP: 1, profitRate: 0.1, profitPH: 100, profitPD: 2400, tradingEfficiency: 10, hasManualPrice: false, hasHistory: false, priceDeviation: null, favorite: false }
     ]
     const asc = sortGuideList(rows, { prop: "vol", order: "ascending" })
     expect(asc.map(r => r.hrid)).toEqual(["/items/c", "/items/a", "/items/b"])

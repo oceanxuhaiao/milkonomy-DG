@@ -14,6 +14,8 @@ export interface GuideItem {
   profitRate: number | null
   profitPH: number | null
   profitPD: number | null
+  /** 利润/h × √有效利润率 × 价格可信度 */
+  tradingEfficiency: number | null
   hasManualPrice: boolean
   /** 是否有历史行情数据参与计算 */
   hasHistory: boolean

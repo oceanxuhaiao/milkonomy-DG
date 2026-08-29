@@ -274,6 +274,11 @@ function formatVolume1h(row: GuideItem) {
               {{ fmt(row.profitPH) }}
             </template>
           </el-table-column>
+          <el-table-column prop="tradingEfficiency" :label="t('倒货效率')" align="center" min-width="120" sortable="custom" :sort-orders="['descending', 'ascending']">
+            <template #default="{ row }">
+              {{ fmt(row.tradingEfficiency) }}
+            </template>
+          </el-table-column>
           <el-table-column prop="profitRate" :label="t('利润率')" min-width="120" align="center" sortable="custom" :sort-orders="['descending', 'ascending']">
             <template #default="{ row }">
               {{ row.profitRate !== null ? Format.percent(row.profitRate) : "-" }}

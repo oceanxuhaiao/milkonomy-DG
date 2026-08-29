@@ -20,6 +20,27 @@ export function calcGuideItem(buyPrice: number, sellPrice: number, vol: number, 
   return { profitPP, profitRate, profitPH, profitPD }
 }
 
+/**
+ * 倒货效率 = 利润/h × √有效利润率 × 价格可信度。
+ * 有效利润率限制在 0~100%；价格偏差每增加 5%，可信度奖励部分减半。
+ * 两侧偏差都缺失时采用 0.5 的保守系数。
+ */
+export function calcTradingEfficiency(
+  profitPH: number | null,
+  profitRate: number | null,
+  priceDeviation: { buy: number | null, sell: number | null } | null
+) {
+  if (profitPH === null || profitRate === null) return null
+  const effectiveRate = Math.min(Math.max(profitRate, 0), 1)
+  const deviations = [priceDeviation?.buy, priceDeviation?.sell]
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value))
+    .map(Math.abs)
+  const confidence = deviations.length > 0
+    ? 0.5 + 0.5 * 2 ** (-Math.max(...deviations) / 0.05)
+    : 0.5
+  return profitPH * Math.sqrt(effectiveRate) * confidence
+}
+
 export function isEquipmentItem(item: { categoryHrid?: string }) {
   return item.categoryHrid === "/item_categories/equipment"
 }
@@ -125,6 +146,7 @@ export function buildGuideRows(
         historyGetter?.(item.hrid, level)
       )
       const profit = calcGuideItem(price.buyPrice, price.sellPrice, price.vol, taxFactor)
+      const tradingEfficiency = calcTradingEfficiency(profit.profitPH, profit.profitRate, price.priceDeviation)
       rows.push({
         hrid: item.hrid,
         level,
@@ -132,6 +154,7 @@ export function buildGuideRows(
         item,
         ...price,
         ...profit,
+        tradingEfficiency,
         favorite: false
       })
     }
@@ -173,7 +196,7 @@ export function filterGuideList(list: GuideItem[], params: GuideRequestData): Gu
   return result
 }
 
-const SORTABLE_PROPS = ["profitPD", "profitPH", "profitRate", "profitPP", "vol"]
+const SORTABLE_PROPS = ["profitPD", "profitPH", "profitRate", "profitPP", "vol", "tradingEfficiency"]
 
 function compareGuide(a: GuideItem, b: GuideItem, prop: string, order: string): number {
   const va = (a as any)[prop]
