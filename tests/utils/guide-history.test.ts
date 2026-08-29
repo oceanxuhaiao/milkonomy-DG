@@ -35,17 +35,22 @@ describe("calcHistoryStats", () => {
     expect(s.medianSell1d).toBe(16.5)
   })
 
-  it("5d 均量为窗口内 v 的平均", () => {
+  it("5d 均量为窗口内总成交量除以120小时", () => {
     const points = [pt(10, 15, 10, 13, 6), pt(50, 15, 10, 13, 10)]
     const s = calcHistoryStats(points, NOW)!
-    expect(s.avgVol5d).toBe(8)
+    expect(s.avgVol5d).toBe(16 / 120)
+  })
+
+  it("缺少记录的小时按0成交处理", () => {
+    const s = calcHistoryStats([pt(10, 15, 10, 13, 1)], NOW)!
+    expect(s.avgVol5d).toBeCloseTo(1 / 120, 10)
   })
 
   it("窗口边界：恰好 24h/120h 的记录算在窗口内", () => {
     const points = [pt(24, 15, 10, 13, 7), pt(120, 15, 10, 13, 9)]
     const s = calcHistoryStats(points, NOW)!
     expect(s.medianBuy1d).toBe(10) // time >= NOW-24h 含边界
-    expect(s.avgVol5d).toBe(8)
+    expect(s.avgVol5d).toBe(16 / 120)
   })
 
   it("5d 窗口内无任何有效记录返回 null", () => {

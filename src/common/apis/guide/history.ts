@@ -35,7 +35,7 @@ export interface GuideHistoryStats {
   medianBuy1d: number
   /** 最近24h 卖价(a)中位数，无数据 -1 */
   medianSell1d: number
-  /** 最近120h 成交量(v)逐小时平均，无数据 -1 */
+  /** 最近120h 成交量(v)总和 / 120，无数据 -1 */
   avgVol5d: number
   report: {
     "1d": WindowReport
@@ -233,7 +233,9 @@ export function calcHistoryStats(points: HistoryPoint[], nowSec: number = Math.f
 
   const medianBuy1d = medianOf(buys1d)
   const medianSell1d = medianOf(sells1d)
-  const avgVol5d = vols5d.length > 0 ? vols5d.reduce((s, v) => s + v, 0) / vols5d.length : -1
+  // 历史文件只记录有行情的小时。未出现的小时应视为 0 成交，
+  // 否则低流通物品（例如 5 天仅成交 1 件）会被错误计算成 1 件/h。
+  const avgVol5d = vols5d.length > 0 ? vols5d.reduce((s, v) => s + v, 0) / 120 : -1
 
   const report = {
     "1d": buildWindowReport(valid5d.filter(p => inWindow(p, WINDOWS["1d"]))),

@@ -162,7 +162,10 @@ function fmt(value: number | null | undefined) {
 }
 
 function formatVolume1h(row: GuideItem) {
-  return row.vol < 0 ? "-" : Format.number(row.vol)
+  if (row.vol < 0) return "-"
+  if (row.vol < 0.01) return Format.number(row.vol, 6)
+  if (row.vol < 1) return Format.number(row.vol, 4)
+  return Format.number(row.vol)
 }
 </script>
 

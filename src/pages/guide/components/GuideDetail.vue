@@ -64,6 +64,13 @@ function fmtNumber(v: number) {
   return v >= 0 ? Format.number(v) : "-"
 }
 
+function fmtVolume1h(v: number) {
+  if (v < 0) return "-"
+  if (v < 0.01) return Format.number(v, 6)
+  if (v < 1) return Format.number(v, 4)
+  return Format.number(v)
+}
+
 function reportRow(label: string, r: WindowReport) {
   return {
     label,
@@ -99,7 +106,7 @@ const historyRows = computed(() => {
           {{ data.sellPrice > 0 ? Format.price(data.sellPrice) : "-" }}
         </el-descriptions-item>
         <el-descriptions-item :label="t('成交量(1h)')">
-          {{ data.vol >= 0 ? Format.number(data.vol) : "-" }}
+          {{ fmtVolume1h(data.vol) }}
         </el-descriptions-item>
         <el-descriptions-item :label="t('利润率')">
           {{ data.profitRate !== null ? Format.percent(data.profitRate) : "-" }}
