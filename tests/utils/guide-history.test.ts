@@ -353,19 +353,19 @@ describe("buildGuideRows 注入历史", () => {
 
   it("historyGetter 命中时行含 hasHistory 与偏差", () => {
     const historyGetter = () => ({ medianBuy: 88, medianSell: 96, avgVol: 40 })
-    const rows = buildGuideRows([plainItem], priceGetter, manualGetter, 0.95, historyGetter)
+    const rows = buildGuideRows([plainItem], priceGetter, manualGetter, 0.96, historyGetter)
     expect(rows[0].hasHistory).toBe(true)
     expect(rows[0].buyPrice).toBe(88)
     expect(rows[0].vol).toBe(40)
-    expect(rows[0].profitPP).toBe(96 * 0.95 - 88)
+    expect(rows[0].profitPP).toBe(96 * 0.96 - 88)
   })
 
   it("historyGetter 返回 null 时行为与原来一致", () => {
-    const rows = buildGuideRows([plainItem], priceGetter, manualGetter, 0.95, () => null)
+    const rows = buildGuideRows([plainItem], priceGetter, manualGetter, 0.96, () => null)
     expect(rows[0].hasHistory).toBe(false)
     expect(rows[0].priceDeviation).toBeNull()
     expect(rows[0].buyPrice).toBe(90)
-    expect(rows[0].profitPP).toBe(100 * 0.95 - 90)
+    expect(rows[0].profitPP).toBe(100 * 0.96 - 90)
   })
 })
 
